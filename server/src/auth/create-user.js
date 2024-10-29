@@ -1,12 +1,12 @@
 import _ from 'underscore';
-import pg from '../db/pg-query.js';
-import fail from '../utils/fail.js';
-import Config from '../config.js';
-import cookies from '../utils/cookies.js';
-import Session from '../session.js';
-import Utils from '../utils/common.js';
-import Password from './password.js';
-import emailSenders from '../email/senders.js';
+import pg from '../db/pg-query';
+import fail from '../utils/fail';
+import Config from '../config';
+import cookies from '../utils/cookies';
+import Session from '../session';
+import Utils from '../utils/common';
+import Password from './password';
+import emailSenders from '../email/senders';
 const COOKIES = cookies.COOKIES;
 const sendTextEmail = emailSenders.sendTextEmail;
 function createUser(req, res) {
@@ -18,7 +18,7 @@ function createUser(req, res) {
   let zinvite = req.p.zinvite;
   let organization = req.p.organization;
   let gatekeeperTosPrivacy = req.p.gatekeeperTosPrivacy;
-  let site_id;
+  let site_id = void 0;
   if (req.p.encodedParams) {
     let decodedParams = decodeParams(req.p.encodedParams);
     if (decodedParams.site_id) {

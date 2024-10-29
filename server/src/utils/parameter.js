@@ -1,12 +1,12 @@
 import _ from 'underscore';
 import { isUri } from 'valid-url';
 import LruCache from 'lru-cache';
-import pg from '../db/pg-query.js';
-import fail from './fail.js';
-import logger from './logger.js';
-import Conversation from '../conversation.js';
-import User from '../user.js';
-import { MPromise } from './metered.js';
+import pg from '../db/pg-query';
+import fail from './fail';
+import logger from './logger';
+import Conversation from '../conversation';
+import User from '../user';
+import { MPromise } from './metered';
 function moveToBody(req, res, next) {
   if (req.query) {
     req.body = req.body || {};
@@ -79,19 +79,19 @@ function wantHeader(name, parserWhichReturnsPromise, assigner, defaultVal) {
 }
 function extractFromBody(req, name) {
   if (!req.body) {
-    return;
+    return void 0;
   }
   return req.body[name];
 }
 function extractFromCookie(req, name) {
   if (!req.cookies) {
-    return;
+    return void 0;
   }
   return req.cookies[name];
 }
 function extractFromHeader(req, name) {
   if (!req.headers) {
-    return;
+    return void 0;
   }
   return req.headers[name.toLowerCase()];
 }
@@ -118,7 +118,7 @@ function buildCallback(config) {
             next();
           },
           function (err) {
-            let s = 'polis_err_param_parse_failed_' + name;
+            let s = `polis_err_param_parse_failed_${name} (val='${val}', error=${err})`;
             logger.error(s, err);
             res.status(400);
             next(s);

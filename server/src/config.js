@@ -1,5 +1,3 @@
-import * as dotenv from 'dotenv';
-dotenv.config();
 import fs from 'fs';
 import isTrue from 'boolean';
 const devHostname = process.env.API_DEV_HOSTNAME || 'localhost:5000';
@@ -55,10 +53,12 @@ export default {
   adminEmails: process.env.ADMIN_EMAILS || '[]',
   adminUIDs: process.env.ADMIN_UIDS || '[]',
   akismetAntispamApiKey: process.env.AKISMET_ANTISPAM_API_KEY || null,
+  googleJigsawPerspectiveApiKey: process.env.GOOGLE_JIGSAW_PERSPECTIVE_API_KEY || null,
   awsRegion: process.env.AWS_REGION,
   backfillCommentLangDetection: isTrue(process.env.BACKFILL_COMMENT_LANG_DETECTION),
   cacheMathResults: isTrueOrBlank(process.env.CACHE_MATH_RESULTS),
   databaseURL: process.env.DATABASE_URL,
+  databaseSSL: isTrue(process.env.DATABASE_SSL),
   emailTransportTypes: process.env.EMAIL_TRANSPORT_TYPES || null,
   encryptionPassword: process.env.ENCRYPTION_PASSWORD_00001,
   fbAppId: process.env.FB_APP_ID || null,

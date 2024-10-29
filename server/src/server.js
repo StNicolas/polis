@@ -1,12 +1,13 @@
 'use strict';
 import akismetLib from 'akismet';
 import AWS from 'aws-sdk';
-import badwords from 'badwords/object.js';
-import Promise from 'bluebird';
+import badwords from 'badwords/object';
+import { Promise as BluebirdPromise } from 'bluebird';
 import http from 'http';
 import httpProxy from 'http-proxy';
 import async from 'async';
 import FB from 'fb';
+import { google } from 'googleapis';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import OAuth from 'oauth';
@@ -15,54 +16,56 @@ import responseTime from 'response-time';
 import request from 'request-promise';
 import LruCache from 'lru-cache';
 import timeout from 'connect-timeout';
-import zlib from 'zlib';
 import _ from 'underscore';
 import pg from 'pg';
 import { encode } from 'html-entities';
-import { METRICS_IN_RAM, addInRamMetric, MPromise } from './utils/metered.js';
-import CreateUser from './auth/create-user.js';
-import Password from './auth/password.js';
-import dbPgQuery from './db/pg-query.js';
-import Config from './config.js';
-import fail from './utils/fail.js';
+import { METRICS_IN_RAM, addInRamMetric, MPromise } from './utils/metered';
+import CreateUser from './auth/create-user';
+import Password from './auth/password';
+import dbPgQuery, {
+  query as pgQuery,
+  query_readOnly as pgQuery_readOnly,
+  queryP as pgQueryP,
+  queryP_metered_readOnly as pgQueryP_metered_readOnly,
+  queryP_readOnly as pgQueryP_readOnly,
+  queryP_readOnly_wRetryIfEmpty as pgQueryP_readOnly_wRetryIfEmpty
+} from './db/pg-query';
+import Config from './config';
+import fail from './utils/fail';
+import { getPca, fetchAndCacheLatestPcaData } from './utils/pca';
+import { getZinvite, getZinvites, getZidForRid } from './utils/zinvite';
+import { handle_GET_reportExport } from './routes/export';
 AWS.config.update({ region: Config.awsRegion });
 const devMode = Config.isDevMode;
 const s3Client = new AWS.S3({ apiVersion: '2006-03-01' });
 const escapeLiteral = pg.Client.prototype.escapeLiteral;
-const pgQuery = dbPgQuery.query;
-const pgQuery_readOnly = dbPgQuery.query_readOnly;
-const pgQueryP = dbPgQuery.queryP;
-const pgQueryP_metered = dbPgQuery.queryP_metered;
-const pgQueryP_metered_readOnly = dbPgQuery.queryP_metered_readOnly;
-const pgQueryP_readOnly = dbPgQuery.queryP_readOnly;
-const pgQueryP_readOnly_wRetryIfEmpty = dbPgQuery.queryP_readOnly_wRetryIfEmpty;
 const doSendVerification = CreateUser.doSendVerification;
 const generateAndRegisterZinvite = CreateUser.generateAndRegisterZinvite;
 const generateToken = Password.generateToken;
 const generateTokenP = Password.generateTokenP;
-import { checkPassword, generateHashedPassword } from './auth/password.js';
-import cookies from './utils/cookies.js';
+import { checkPassword, generateHashedPassword } from './auth/password';
+import cookies from './utils/cookies';
 const COOKIES = cookies.COOKIES;
 const COOKIES_TO_CLEAR = cookies.COOKIES_TO_CLEAR;
-import constants from './utils/constants.js';
+import constants from './utils/constants';
 const DEFAULTS = constants.DEFAULTS;
-import User from './user.js';
-import Conversation from './conversation.js';
-import Session from './session.js';
-import Comment from './comment.js';
-import Utils from './utils/common.js';
-import SQL from './db/sql.js';
-import logger from './utils/logger.js';
-import emailSenders from './email/senders.js';
+import User from './user';
+import Conversation from './conversation';
+import Session from './session';
+import Comment from './comment';
+import Utils from './utils/common';
+import SQL from './db/sql';
+import logger from './utils/logger';
+import emailSenders from './email/senders';
 const sendTextEmail = emailSenders.sendTextEmail;
 const sendTextEmailWithBackupOnly = emailSenders.sendTextEmailWithBackupOnly;
 const resolveWith = (x) => {
   return Promise.resolve(x);
 };
 if (devMode) {
-  Promise.longStackTraces();
+  BluebirdPromise.longStackTraces();
 }
-Promise.onPossiblyUnhandledRejection(function (err) {
+BluebirdPromise.onPossiblyUnhandledRejection(function (err) {
   logger.error('onPossiblyUnhandledRejection', err);
 });
 const adminEmails = Config.adminEmails ? JSON.parse(Config.adminEmails) : [];
@@ -191,7 +194,7 @@ function doXidApiKeyAuth(assigner, apikey, xid, isOptional, req, res, next) {
         return getXidRecordByXidOwnerId(
           xid,
           uidForApiKey,
-          undefined, // zid_optional
+          void 0,
           req.body.x_profile_image_url || req?.query?.x_profile_image_url,
           req.body.x_name || req?.query?.x_name || null,
           req.body.x_email || req?.query?.x_email || null,
@@ -345,7 +348,7 @@ function initializePolisHelpers() {
       });
     });
   }
-  async function votesPost(uid, pid, zid, tid, xid, voteType, weight) {
+  function votesPost(uid, pid, zid, tid, xid, voteType, weight) {
     return pgQueryP_readOnly('select * from conversations where zid = ($1);', [zid])
       .then(function (rows) {
         if (!rows || !rows.length) {
@@ -662,212 +665,7 @@ function initializePolisHelpers() {
     }
     res.status(200).json({});
   }
-  let pcaCacheSize = Config.cacheMathResults ? 300 : 1;
-  let pcaCache = new LruCache({
-    max: pcaCacheSize
-  });
-  let lastPrefetchedMathTick = -1;
-  function fetchAndCacheLatestPcaData() {
-    let lastPrefetchPollStartTime = Date.now();
-    function waitTime() {
-      let timePassed = Date.now() - lastPrefetchPollStartTime;
-      return Math.max(0, 2500 - timePassed);
-    }
-    pgQueryP_readOnly('select * from math_main where caching_tick > ($1) order by caching_tick limit 10;', [
-      lastPrefetchedMathTick
-    ])
-      .then((rows) => {
-        if (!rows || !rows.length) {
-          logger.debug('mathpoll done');
-          setTimeout(fetchAndCacheLatestPcaData, waitTime());
-          return;
-        }
-        let results = rows.map((row) => {
-          let item = row.data;
-          if (row.math_tick) {
-            item.math_tick = Number(row.math_tick);
-          }
-          if (row.caching_tick) {
-            item.caching_tick = Number(row.caching_tick);
-          }
-          logger.debug('mathpoll updating', {
-            caching_tick: item.caching_tick,
-            zid: item.zid
-          });
-          if (item.caching_tick > lastPrefetchedMathTick) {
-            lastPrefetchedMathTick = item.caching_tick;
-          }
-          processMathObject(item);
-          return updatePcaCache(item.zid, item);
-        });
-        Promise.all(results).then((a) => {
-          setTimeout(fetchAndCacheLatestPcaData, waitTime());
-        });
-      })
-      .catch((err) => {
-        logger.error('mathpoll error', err);
-        setTimeout(fetchAndCacheLatestPcaData, waitTime());
-      });
-  }
   fetchAndCacheLatestPcaData;
-  function processMathObject(o) {
-    function remapSubgroupStuff(g) {
-      if (_.isArray(g.val)) {
-        g.val = g.val.map((x) => {
-          return { id: Number(x.id), val: x };
-        });
-      } else {
-        g.val = _.keys(g.val).map((id) => {
-          return { id: Number(id), val: g.val[id] };
-        });
-      }
-      return g;
-    }
-    if (_.isArray(o['group-clusters'])) {
-      o['group-clusters'] = o['group-clusters'].map((g) => {
-        return { id: Number(g.id), val: g };
-      });
-    }
-    if (!_.isArray(o['repness'])) {
-      o['repness'] = _.keys(o['repness']).map((gid) => {
-        return { id: Number(gid), val: o['repness'][gid] };
-      });
-    }
-    if (!_.isArray(o['group-votes'])) {
-      o['group-votes'] = _.keys(o['group-votes']).map((gid) => {
-        return { id: Number(gid), val: o['group-votes'][gid] };
-      });
-    }
-    if (!_.isArray(o['subgroup-repness'])) {
-      o['subgroup-repness'] = _.keys(o['subgroup-repness']).map((gid) => {
-        return { id: Number(gid), val: o['subgroup-repness'][gid] };
-      });
-      o['subgroup-repness'].map(remapSubgroupStuff);
-    }
-    if (!_.isArray(o['subgroup-votes'])) {
-      o['subgroup-votes'] = _.keys(o['subgroup-votes']).map((gid) => {
-        return { id: Number(gid), val: o['subgroup-votes'][gid] };
-      });
-      o['subgroup-votes'].map(remapSubgroupStuff);
-    }
-    if (!_.isArray(o['subgroup-clusters'])) {
-      o['subgroup-clusters'] = _.keys(o['subgroup-clusters']).map((gid) => {
-        return { id: Number(gid), val: o['subgroup-clusters'][gid] };
-      });
-      o['subgroup-clusters'].map(remapSubgroupStuff);
-    }
-    function toObj(a) {
-      let obj = {};
-      if (!a) {
-        return obj;
-      }
-      for (let i = 0; i < a.length; i++) {
-        obj[a[i].id] = a[i].val;
-        obj[a[i].id].id = a[i].id;
-      }
-      return obj;
-    }
-    function toArray(a) {
-      if (!a) {
-        return [];
-      }
-      return a.map((g) => {
-        let id = g.id;
-        g = g.val;
-        g.id = id;
-        return g;
-      });
-    }
-    o['repness'] = toObj(o['repness']);
-    o['group-votes'] = toObj(o['group-votes']);
-    o['group-clusters'] = toArray(o['group-clusters']);
-    delete o['subgroup-repness'];
-    delete o['subgroup-votes'];
-    delete o['subgroup-clusters'];
-    return o;
-  }
-  async function getPca(zid, math_tick) {
-    let cached = pcaCache.get(zid);
-    if (cached && cached.expiration < Date.now()) {
-      cached = null;
-    }
-    let cachedPOJO = cached && cached.asPOJO;
-    if (cachedPOJO) {
-      if (cachedPOJO.math_tick <= (math_tick || 0)) {
-        logger.debug('math was cached but not new', {
-          zid,
-          cached_math_tick: cachedPOJO.math_tick,
-          query_math_tick: math_tick
-        });
-        return Promise.resolve(null);
-      } else {
-        logger.debug('math from cache', { zid, math_tick });
-        return Promise.resolve(cached);
-      }
-    }
-    logger.debug('mathpoll cache miss', { zid, math_tick });
-    let queryStart = Date.now();
-    return pgQueryP_readOnly('select * from math_main where zid = ($1) and math_env = ($2);', [
-      zid,
-      Config.mathEnv
-    ]).then((rows) => {
-      let queryEnd = Date.now();
-      let queryDuration = queryEnd - queryStart;
-      addInRamMetric('pcaGetQuery', queryDuration);
-      if (!rows || !rows.length) {
-        logger.debug('mathpoll related; after cache miss, unable to find data for', {
-          zid,
-          math_tick,
-          math_env: Config.mathEnv
-        });
-        return null;
-      }
-      let item = rows[0].data;
-      if (rows[0].math_tick) {
-        item.math_tick = Number(rows[0].math_tick);
-      }
-      if (item.math_tick <= (math_tick || 0)) {
-        logger.debug('after cache miss, unable to find newer item', {
-          zid,
-          math_tick
-        });
-        return null;
-      }
-      logger.debug('after cache miss, found item, adding to cache', {
-        zid,
-        math_tick
-      });
-      processMathObject(item);
-      return updatePcaCache(zid, item).then(
-        function (o) {
-          return o;
-        },
-        function (err) {
-          return err;
-        }
-      );
-    });
-  }
-  function updatePcaCache(zid, item) {
-    return new Promise(function (resolve, reject) {
-      delete item.zid;
-      let asJSON = JSON.stringify(item);
-      let buf = Buffer.from(asJSON, 'utf-8');
-      zlib.gzip(buf, function (err, jsondGzipdPcaBuffer) {
-        if (err) {
-          return reject(err);
-        }
-        let o = {
-          asPOJO: item,
-          asJSON: asJSON,
-          asBufferOfGzippedJson: jsondGzipdPcaBuffer,
-          expiration: Date.now() + 3000
-        };
-        pcaCache.set(zid, o);
-        resolve(o);
-      });
-    });
-  }
   function redirectIfHasZidButNoConversationId(req, res, next) {
     if (req.body.zid && !req.body.conversation_id) {
       logger.info('redirecting old zid user to about page');
@@ -940,14 +738,6 @@ function initializePolisHelpers() {
         fail(res, 500, err);
       });
   }
-  async function getZidForRid(rid) {
-    return pgQueryP('select zid from reports where rid = ($1);', [rid]).then((row) => {
-      if (!row || !row.length) {
-        return null;
-      }
-      return row[0].zid;
-    });
-  }
   function handle_POST_math_update(req, res) {
     let zid = req.p.zid;
     let uid = req.p.uid;
@@ -985,7 +775,7 @@ function initializePolisHelpers() {
         status: 'pending'
       });
     }
-    async function hasCommentSelections() {
+    function hasCommentSelections() {
       return pgQueryP('select * from report_comment_selections where rid = ($1) and selection = 1;', [rid]).then(
         (rows) => {
           return rows.length > 0;
@@ -1090,7 +880,7 @@ function initializePolisHelpers() {
   }
   function handle_GET_dataExport(req, res) {
     getUserInfoForUid2(req.p.uid)
-      .then(async (user) => {
+      .then((user) => {
         return doAddDataExportTask(
           Config.mathEnv,
           user.email,
@@ -1118,7 +908,7 @@ function initializePolisHelpers() {
     });
     res.redirect(url);
   }
-  async function getBidIndexToPidMapping(zid, math_tick) {
+  function getBidIndexToPidMapping(zid, math_tick) {
     math_tick = math_tick || -1;
     return pgQueryP_readOnly('select * from math_bidtopid where zid = ($1) and math_env = ($2);', [
       zid,
@@ -1208,7 +998,7 @@ function initializePolisHelpers() {
         return fail(res, 500, 'polis_err_POST_xidWhitelist', err);
       });
   }
-  async function getBidsForPids(zid, math_tick, pids) {
+  function getBidsForPids(zid, math_tick, pids) {
     let dataPromise = getBidIndexToPidMapping(zid, math_tick);
     let mathResultsPromise = getPca(zid, math_tick);
     return Promise.all([dataPromise, mathResultsPromise]).then(function (items) {
@@ -1346,7 +1136,7 @@ If you need to create a new account, you can do that here ${server}/home
 Feel free to reply to this email if you need help.`;
     return sendTextEmail(polisFromAddress, email, 'Password Reset Failed', body);
   }
-  async function getUidByEmail(email) {
+  function getUidByEmail(email) {
     email = email.toLowerCase();
     return pgQueryP_readOnly('SELECT uid FROM users where LOWER(email) = ($1);', [email]).then(function (rows) {
       if (!rows || !rows.length) {
@@ -1557,70 +1347,6 @@ Feel free to reply to this email if you need help.`;
       }
     );
   }
-  let zidToConversationIdCache = new LruCache({
-    max: 1000
-  });
-  function getZinvite(zid, dontUseCache) {
-    let cachedConversationId = zidToConversationIdCache.get(zid);
-    if (!dontUseCache && cachedConversationId) {
-      return Promise.resolve(cachedConversationId);
-    }
-    return pgQueryP_metered('getZinvite', 'select * from zinvites where zid = ($1);', [zid]).then(function (rows) {
-      let conversation_id = (rows && rows[0] && rows[0].zinvite) || undefined;
-      if (conversation_id) {
-        zidToConversationIdCache.set(zid, conversation_id);
-      }
-      return conversation_id;
-    });
-  }
-  function getZinvites(zids) {
-    if (!zids.length) {
-      return Promise.resolve(zids);
-    }
-    zids = _.map(zids, function (zid) {
-      return Number(zid);
-    });
-    zids = _.uniq(zids);
-    let uncachedZids = zids.filter(function (zid) {
-      return !zidToConversationIdCache.get(zid);
-    });
-    let zidsWithCachedConversationIds = zids
-      .filter(function (zid) {
-        return !!zidToConversationIdCache.get(zid);
-      })
-      .map(function (zid) {
-        return {
-          zid: zid,
-          zinvite: zidToConversationIdCache.get(zid)
-        };
-      });
-    function makeZidToConversationIdMap(arrays) {
-      let zid2conversation_id = {};
-      arrays.forEach(function (a) {
-        a.forEach(function (o) {
-          zid2conversation_id[o.zid] = o.zinvite;
-        });
-      });
-      return zid2conversation_id;
-    }
-    return new MPromise('getZinvites', function (resolve, reject) {
-      if (uncachedZids.length === 0) {
-        resolve(makeZidToConversationIdMap([zidsWithCachedConversationIds]));
-        return;
-      }
-      pgQuery_readOnly(
-        'select * from zinvites where zid in (' + uncachedZids.join(',') + ');',
-        [],
-        function (err, result) {
-          if (err) {
-            reject(err);
-          } else {
-            resolve(makeZidToConversationIdMap([result.rows, zidsWithCachedConversationIds]));
-          }
-        }
-      );
-    });
-  }
   function addConversationId(o, dontUseCache) {
     if (!o.zid) {
       return Promise.resolve(o);
@@ -1712,35 +1438,28 @@ Feel free to reply to this email if you need help.`;
       });
     });
   }
-  function deleteSuzinvite(suzinvite) {
-    return new Promise(function (resolve, reject) {
-      pgQuery('DELETE FROM suzinvites WHERE suzinvite = ($1);', [suzinvite], function (err, results) {
-        if (err) {
-          logger.error('polis_err_removing_suzinvite', err);
-        }
-        resolve();
-      });
-    });
-  }
-  async function xidExists(xid, owner, uid) {
+  const deleteSuzinvite = async (suzinvite) => {
+    try {
+      await pgQuery('DELETE FROM suzinvites WHERE suzinvite = ($1);', [suzinvite]);
+    } catch (err) {
+      logger.error('polis_err_removing_suzinvite', err);
+    }
+  };
+  function xidExists(xid, owner, uid) {
     return pgQueryP('select * from xids where xid = ($1) and owner = ($2) and uid = ($3);', [xid, owner, uid]).then(
       function (rows) {
         return rows && rows.length;
       }
     );
   }
-  function createXidEntry(xid, owner, uid) {
-    return new Promise(function (resolve, reject) {
-      pgQuery('INSERT INTO xids (uid, owner, xid) VALUES ($1, $2, $3);', [uid, owner, xid], function (err, results) {
-        if (err) {
-          logger.error('polis_err_adding_xid_entry', err);
-          reject(new Error('polis_err_adding_xid_entry'));
-          return;
-        }
-        resolve();
-      });
-    });
-  }
+  const createXidEntry = async (xid, owner, uid) => {
+    try {
+      await pgQueryP('INSERT INTO xids (uid, owner, xid) VALUES ($1, $2, $3);', [uid, owner, xid]);
+    } catch (err) {
+      logger.error('polis_err_adding_xid_entry', err);
+      throw new Error('polis_err_adding_xid_entry');
+    }
+  };
   function saveParticipantMetadataChoicesP(zid, pid, answers) {
     return new Promise(function (resolve, reject) {
       saveParticipantMetadataChoices(zid, pid, answers, function (err) {
@@ -1810,7 +1529,7 @@ Feel free to reply to this email if you need help.`;
     IP: 100,
     manual_entry: 1
   };
-  async function getUsersLocationName(uid) {
+  function getUsersLocationName(uid) {
     return Promise.all([
       pgQueryP_readOnly('select * from facebook_users where uid = ($1);', [uid]),
       pgQueryP_readOnly('select * from twitter_users where uid = ($1);', [uid])
@@ -1859,7 +1578,7 @@ Feel free to reply to this email if you need help.`;
       [zid, uid]
     );
   }
-  async function populateGeoIpInfo(zid, uid, ipAddress) {
+  function populateGeoIpInfo(zid, uid, ipAddress) {
     var userId = Config.maxmindUserID;
     var licenseKey = Config.maxmindLicenseKey;
     var url = 'https://geoip.maxmind.com/geoip/v2.1/city/';
@@ -1871,9 +1590,9 @@ Feel free to reply to this email if you need help.`;
     }
     return request
       .get(url + ipAddress, {
-        method: 'GET',
-        contentType: contentType,
         headers: {
+          method: 'GET',
+          contentType: contentType,
           Authorization: 'Basic ' + Buffer.from(userId + ':' + licenseKey, 'utf8').toString('base64')
         }
       })
@@ -1915,7 +1634,7 @@ Feel free to reply to this email if you need help.`;
     qString = qString.replace('9876543212345', 'now_as_millis()');
     return pgQueryP(qString, []);
   }
-  async function tryToJoinConversation(zid, uid, info, pmaid_answers) {
+  function tryToJoinConversation(zid, uid, info, pmaid_answers) {
     function doAddExtendedParticipantInfo() {
       if (info && _.keys(info).length > 0) {
         addExtendedParticipantInfo(zid, uid, info);
@@ -1937,7 +1656,7 @@ Feel free to reply to this email if you need help.`;
       return ptpt;
     });
   }
-  async function addParticipantAndMetadata(zid, uid, req, permanent_cookie) {
+  function addParticipantAndMetadata(zid, uid, req, permanent_cookie) {
     let info = {};
     let parent_url = req?.cookies?.[COOKIES.PARENT_URL] || req?.p?.parent_url;
     let referer = req?.cookies[COOKIES.PARENT_REFERRER] || req?.headers?.['referer'] || req?.headers?.['referrer'];
@@ -2026,7 +1745,7 @@ Feel free to reply to this email if you need help.`;
       return info.owner === uid;
     });
   }
-  async function isModerator(zid, uid) {
+  function isModerator(zid, uid) {
     if (isPolisDev(uid)) {
       return Promise.resolve(true);
     }
@@ -2088,7 +1807,7 @@ Feel free to reply to this email if you need help.`;
   }
   const getUserInfoForUid = User.getUserInfoForUid;
   const getUserInfoForUid2 = User.getUserInfoForUid2;
-  async function emailFeatureRequest(message) {
+  function emailFeatureRequest(message) {
     const body = `Somebody clicked a dummy button!
 
 ${message}`;
@@ -2099,7 +1818,7 @@ ${message}`;
       });
     });
   }
-  async function emailTeam(subject, body) {
+  function emailTeam(subject, body) {
     return sendMultipleTextEmails(polisFromAddress, adminEmails, subject, body).catch(function (err) {
       logger.error('polis_err_failed_to_email_team', err);
     });
@@ -2175,7 +1894,7 @@ ${serverName}/welcome/${einvite}
 Thank you for using Polis`;
     return sendTextEmail(polisFromAddress, email, 'Get Started with Polis', body);
   }
-  async function isEmailVerified(email) {
+  function isEmailVerified(email) {
     return dbPgQuery.queryP('select * from email_validations where email = ($1);', [email]).then(function (rows) {
       return rows.length > 0;
     });
@@ -2183,7 +1902,7 @@ Thank you for using Polis`;
   function handle_GET_verification(req, res) {
     let einvite = req.p.e;
     pgQueryP('select * from einvites where einvite = ($1);', [einvite])
-      .then(async function (rows) {
+      .then(function (rows) {
         if (!rows.length) {
           fail(res, 500, 'polis_err_verification_missing');
         }
@@ -2227,13 +1946,13 @@ Email verified! You can close this tab or hit the back button.
     let hash = hmac.read();
     return hash;
   }
-  function verifyHmacForQueryParams(path, params) {
-    return new Promise(function (resolve, reject) {
-      params = _.clone(params);
-      let hash = params[HMAC_SIGNATURE_PARAM_NAME];
-      delete params[HMAC_SIGNATURE_PARAM_NAME];
-      let correctHash = createHmacForQueryParams(path, params);
-      setTimeout(function () {
+  const verifyHmacForQueryParams = (path, params) => {
+    return new Promise((resolve, reject) => {
+      const clonedParams = { ...params };
+      const hash = clonedParams[HMAC_SIGNATURE_PARAM_NAME];
+      delete clonedParams[HMAC_SIGNATURE_PARAM_NAME];
+      const correctHash = createHmacForQueryParams(path, clonedParams);
+      setTimeout(() => {
         logger.debug('comparing', { correctHash, hash });
         if (correctHash === hash) {
           resolve();
@@ -2242,7 +1961,7 @@ Email verified! You can close this tab or hit the back button.
         }
       });
     });
-  }
+  };
   function sendEmailByUid(uid, subject, body) {
     return getUserInfoForUid2(uid).then(function (userInfo) {
       return sendTextEmail(
@@ -2382,7 +2101,7 @@ Email verified! You can close this tab or hit the back button.
         fail(res, 500, 'polis_err_post_participants_misc', err);
       });
   }
-  async function subscribeToNotifications(zid, uid, email) {
+  function subscribeToNotifications(zid, uid, email) {
     let type = 1;
     logger.info('subscribeToNotifications', { zid, uid });
     return pgQueryP('update participants_extended set subscribe_email = ($3) where zid = ($1) and uid = ($2);', [
@@ -2399,7 +2118,7 @@ Email verified! You can close this tab or hit the back button.
       });
     });
   }
-  async function unsubscribeFromNotifications(zid, uid) {
+  function unsubscribeFromNotifications(zid, uid) {
     let type = 0;
     return pgQueryP('update participants set subscribed = ($3) where zid = ($1) and uid = ($2);', [
       zid,
@@ -2421,7 +2140,7 @@ Email verified! You can close this tab or hit the back button.
       timeInMillis
     ]);
   }
-  async function claimNextNotificationTask() {
+  function claimNextNotificationTask() {
     return pgQueryP(
       'delete from notification_tasks where zid = (select zid from notification_tasks order by random() for update skip locked limit 1) returning *;'
     ).then((rows) => {
@@ -2431,12 +2150,12 @@ Email verified! You can close this tab or hit the back button.
       return rows[0];
     });
   }
-  async function getDbTime() {
+  function getDbTime() {
     return pgQueryP('select now_as_millis();', []).then((rows) => {
       return rows[0].now_as_millis;
     });
   }
-  async function doNotificationsForZid(zid, timeOfLastEvent) {
+  function doNotificationsForZid(zid, timeOfLastEvent) {
     let shouldTryAgain = false;
     return pgQueryP('select * from participants where zid = ($1) and last_notified < ($2) and subscribed > 0;', [
       zid,
@@ -2460,7 +2179,7 @@ Email verified! You can close this tab or hit the back button.
           candidates.forEach((c) => {
             pid_to_ptpt[c.pid] = c;
           });
-          return Promise.mapSeries(candidates, async (item, index, length) => {
+          return BluebirdPromise.mapSeries(candidates, (item, index, length) => {
             return getNumberOfCommentsRemaining(item.zid, item.pid).then((rows) => {
               return rows[0];
             });
@@ -2508,7 +2227,7 @@ Email verified! You can close this tab or hit the back button.
               rows.forEach((row) => {
                 uidToEmail[row.uid] = row.subscribe_email;
               });
-              return Promise.each(needNotification, (item, index, length) => {
+              return BluebirdPromise.each(needNotification, (item, index, length) => {
                 const uid = pid_to_ptpt[item.pid].uid;
                 return sendNotificationEmail(uid, url, conversation_id, uidToEmail[uid], item.remaining).then(() => {
                   return pgQueryP(
@@ -2525,7 +2244,7 @@ Email verified! You can close this tab or hit the back button.
         return shouldTryAgain;
       });
   }
-  async function doNotificationBatch() {
+  function doNotificationBatch() {
     return claimNextNotificationTask().then((task) => {
       if (!task) {
         return Promise.resolve();
@@ -2593,7 +2312,7 @@ Email verified! You can close this tab or hit the back button.
     params[HMAC_SIGNATURE_PARAM_NAME] = req.p[HMAC_SIGNATURE_PARAM_NAME];
     verifyHmacForQueryParams('api/v3/notifications/subscribe', params)
       .then(
-        async function () {
+        function () {
           return pgQueryP(
             'update participants set subscribed = 1 where uid = (select uid from users where email = ($2)) and zid = ($1);',
             [zid, email]
@@ -2623,7 +2342,7 @@ Email verified! You can close this tab or hit the back button.
     params[HMAC_SIGNATURE_PARAM_NAME] = req.p[HMAC_SIGNATURE_PARAM_NAME];
     verifyHmacForQueryParams('api/v3/notifications/unsubscribe', params)
       .then(
-        async function () {
+        function () {
           return pgQueryP(
             'update participants set subscribed = 0 where uid = (select uid from users where email = ($2)) and zid = ($1);',
             [zid, email]
@@ -2723,7 +2442,7 @@ Email verified! You can close this tab or hit the back button.
       });
     });
   }
-  async function handle_POST_joinWithInvite(req, res) {
+  function handle_POST_joinWithInvite(req, res) {
     return joinWithZidOrSuzinvite({
       answers: req.p.answers,
       existingAuth: !!req.p.uid,
@@ -2778,7 +2497,7 @@ Email verified! You can close this tab or hit the back button.
         }
       });
   }
-  async function joinWithZidOrSuzinvite(o) {
+  function joinWithZidOrSuzinvite(o) {
     return Promise.resolve(o)
       .then(function (o) {
         if (o.suzinvite) {
@@ -2851,7 +2570,7 @@ Email verified! You can close this tab or hit the back button.
             var shouldCreateXidEntryPromise = o.conv.use_xid_whitelist
               ? isXidWhitelisted(o.conv.owner, o.xid)
               : Promise.resolve(true);
-            shouldCreateXidEntryPromise.then(async (should) => {
+            shouldCreateXidEntryPromise.then((should) => {
               if (should) {
                 return createXidEntry(o.xid, o.conv.org_id, o.uid).then(function () {
                   return o;
@@ -2975,14 +2694,18 @@ Email verified! You can close this tab or hit the back button.
     }
     return firstVotes;
   }
-  async function isParentDomainWhitelisted(domain, zid, isWithinIframe, domain_whitelist_override_key) {
+  function isParentDomainWhitelisted(domain, zid, isWithinIframe, domain_whitelist_override_key) {
     return pgQueryP_readOnly(
       'select * from site_domain_whitelist where site_id = ' +
         '(select site_id from users where uid = ' +
         '(select owner from conversations where zid = ($1)));',
       [zid]
     ).then(function (rows) {
-      logger.debug('isParentDomainWhitelisted', { domain, zid, isWithinIframe });
+      logger.debug('isParentDomainWhitelisted', {
+        domain,
+        zid,
+        isWithinIframe
+      });
       if (!rows || !rows.length || !rows[0].domain_whitelist.length) {
         logger.debug('isParentDomainWhitelisted : no whitelist');
         return true;
@@ -3064,7 +2787,7 @@ Email verified! You can close this tab or hit the back button.
         next('polis_err_domain_misc');
       });
   }
-  async function setDomainWhitelist(uid, newWhitelist) {
+  function setDomainWhitelist(uid, newWhitelist) {
     return pgQueryP(
       'select * from site_domain_whitelist where site_id = (select site_id from users where uid = ($1));',
       [uid]
@@ -3082,7 +2805,7 @@ Email verified! You can close this tab or hit the back button.
       }
     });
   }
-  async function getDomainWhitelist(uid) {
+  function getDomainWhitelist(uid) {
     return pgQueryP(
       'select * from site_domain_whitelist where site_id = (select site_id from users where uid = ($1));',
       [uid]
@@ -3217,6 +2940,56 @@ Email verified! You can close this tab or hit the back button.
     if (true) {
       throw new Error('TODO Needs to clone participants_extended and any other new tables as well.');
     }
+    if (isPolisDev(uid)) {
+    } else {
+      fail(res, 403, 'polis_err_permissions');
+      return;
+    }
+    pgQuery(
+      'insert into conversations (topic, description, link_url, owner, modified, created, participant_count) ' +
+        "(select '(SNAPSHOT) ' || topic, description, link_url, $2, now_as_millis(), created, participant_count from conversations where zid = $1) returning *;",
+      [zid, uid],
+      function (err, result) {
+        if (err) {
+          fail(res, 500, 'polis_err_cloning_conversation', err);
+          return;
+        }
+        let conv = result.rows[0];
+        let newZid = conv.zid;
+        return pgQueryP(
+          'insert into participants (pid, zid, uid, created, mod, subscribed) ' +
+            'select pid, ($2), uid, created, mod, 0 from participants where zid = ($1);',
+          [zid, newZid]
+        )
+          .then(function () {
+            return pgQueryP(
+              'insert into comments (pid, tid, zid, txt, velocity, mod, uid, active, lang, lang_confidence, created) ' +
+                'select pid, tid, ($2), txt, velocity, mod, uid, active, lang, lang_confidence, created from comments where zid = ($1);',
+              [zid, newZid]
+            ).then(function () {
+              return pgQueryP('select * from votes where zid = ($1);', [zid]).then((votes) => {
+                return Promise.all(
+                  votes.map(function (v) {
+                    let q = 'insert into votes (zid, pid, tid, vote, created) values ($1, $2, $3, $4, $5);';
+                    return pgQueryP(q, [newZid, v.pid, v.tid, v.vote, v.created]);
+                  })
+                ).then(function () {
+                  return generateAndRegisterZinvite(newZid, true).then(function (zinvite) {
+                    res.status(200).json({
+                      zid: newZid,
+                      zinvite: zinvite,
+                      url: getServerNameWithProtocol(req) + '/' + zinvite
+                    });
+                  });
+                });
+              });
+            });
+          })
+          .catch(function (err) {
+            fail(res, 500, 'polis_err_cloning_conversation_misc', err);
+          });
+      }
+    );
   }
   function handle_GET_facebook_delete(req, res) {
     deleteFacebookUserRecord(req.p)
@@ -3229,26 +3002,22 @@ Email verified! You can close this tab or hit the back button.
   }
   function getFriends(fb_access_token) {
     function getMoreFriends(friendsSoFar, urlForNextCall) {
-      return request.get(urlForNextCall).then(
-        function (response) {
-          let len = response.data.length;
-          if (len) {
-            for (var i = 0; i < len; i++) {
-              friendsSoFar.push(response.data[i]);
+      return request
+        .get(urlForNextCall)
+        .then((response) => {
+          const { data, paging } = response;
+          if (data.length) {
+            friendsSoFar.push(...data);
+            if (paging.next) {
+              return getMoreFriends(friendsSoFar, paging.next);
             }
-            if (response.paging.next) {
-              return getMoreFriends(friendsSoFar, response.paging.next);
-            }
-            return friendsSoFar;
-          } else {
-            return friendsSoFar;
           }
-        },
-        function (err) {
+          return Promise.resolve(friendsSoFar);
+        })
+        .catch((err) => {
           emailBadProblemTime('getMoreFriends failed');
-          return friendsSoFar;
-        }
-      );
+          return Promise.resolve(friendsSoFar);
+        });
     }
     return new Promise(function (resolve, reject) {
       FB.setAccessToken(fb_access_token);
@@ -3435,7 +3204,7 @@ Email verified! You can close this tab or hit the back button.
                       : Promise.resolve();
                     return friendsAddedPromise
                       .then(
-                        async function () {
+                        function () {
                           return startSessionAndAddCookies(req, res, user.uid).then(function () {
                             return user;
                           });
@@ -3493,7 +3262,7 @@ Email verified! You can close this tab or hit the back button.
         });
       }
       promise
-        .then(async function (user) {
+        .then(function (user) {
           return createFacebookUserRecord(Object.assign({}, user, fbUserRecord)).then(function () {
             return user;
           });
@@ -3565,13 +3334,10 @@ Email verified! You can close this tab or hit the back button.
         }
       }
       pgQueryP(
-        `
-        select users.*, facebook_users.fb_user_id 
-        from users 
-        left join facebook_users on users.uid = facebook_users.uid 
-        where users.email = $1 
-          or facebook_users.fb_user_id = $2;
-      `,
+        'select users.*, facebook_users.fb_user_id from users left join facebook_users on users.uid = facebook_users.uid ' +
+          'where users.email = ($1) ' +
+          '   or facebook_users.fb_user_id = ($2) ' +
+          ';',
         [email, fb_user_id]
       )
         .then(
@@ -3742,7 +3508,7 @@ Email verified! You can close this tab or hit the back button.
     }
     return gender;
   }
-  async function getDemographicsForVotersOnComments(zid, comments) {
+  function getDemographicsForVotersOnComments(zid, comments) {
     function isAgree(v) {
       return v.vote === polisTypes.reactions.pull;
     }
@@ -3829,7 +3595,7 @@ Email verified! You can close this tab or hit the back button.
     const tid = req.p.tid;
     const firstTwoCharsOfLang = req.p.lang.substr(0, 2);
     getComment(zid, tid)
-      .then(async (comment) => {
+      .then((comment) => {
         return dbPgQuery
           .queryP("select * from comment_translations where zid = ($1) and tid = ($2) and lang LIKE '$3%';", [
             zid,
@@ -3938,7 +3704,7 @@ Email verified! You can close this tab or hit the back button.
             let count = result && result.rows && result.rows[0] && result.rows[0].count;
             count = Number(count);
             if (isNaN(count)) {
-              count = undefined;
+              count = void 0;
             }
             resolve(count);
           }
@@ -3959,7 +3725,7 @@ Email verified! You can close this tab or hit the back button.
     getZinvite(zid)
       .catch(function (err) {
         logger.error('polis_err_getting_zinvite', err);
-        return;
+        return void 0;
       })
       .then(function (zinvite) {
         body += createProdModerationUrl(zinvite);
@@ -3985,19 +3751,20 @@ Email verified! You can close this tab or hit the back button.
     return url;
   }
   function moderateComment(zid, tid, active, mod, is_meta) {
-    return new Promise(function (resolve, reject) {
-      pgQuery(
-        'UPDATE COMMENTS SET active=($3), mod=($4), modified=now_as_millis(), is_meta = ($5) WHERE zid=($1) and tid=($2);',
-        [zid, tid, active, mod, is_meta],
-        function (err) {
-          if (err) {
-            reject(err);
-          } else {
-            addNotificationTask(zid);
-            resolve();
-          }
+    return new Promise((resolve, reject) => {
+      let query = 'UPDATE comments SET active = $1, mod = $2, is_meta = $3 WHERE zid = $4 AND tid = $5';
+      let params = [active, mod, is_meta, zid, tid];
+      console.log('Executing query:', query);
+      console.log('With parameters:', params);
+      pgQuery(query, params, (err, result) => {
+        if (err) {
+          console.error('Database error:', err);
+          reject(err);
+        } else {
+          console.log('Query executed successfully');
+          resolve(result);
         }
-      );
+      });
     });
   }
   const getComment = Comment.getComment;
@@ -4011,293 +3778,213 @@ Email verified! You can close this tab or hit the back button.
     }
     return false;
   }
-  async function commentExists(zid, txt) {
+  function commentExists(zid, txt) {
     return pgQueryP('select zid from comments where zid = ($1) and txt = ($2);', [zid, txt]).then(function (rows) {
       return rows && rows.length;
     });
   }
-  function handle_POST_comments(req, res) {
-    let zid = req.p.zid;
-    let xid = req.p.xid;
-    let uid = req.p.uid;
-    let txt = req.p.txt;
-    let pid = req.p.pid;
+  const GOOGLE_DISCOVERY_URL = 'https://commentanalyzer.googleapis.com/$discovery/rest?version=v1alpha1';
+  async function analyzeComment(txt) {
+    try {
+      const client = await google.discoverAPI(GOOGLE_DISCOVERY_URL);
+      const analyzeRequest = {
+        comment: {
+          text: txt
+        },
+        requestedAttributes: {
+          TOXICITY: {}
+        }
+      };
+      const response = await client.comments.analyze({
+        key: Config.googleJigsawPerspectiveApiKey,
+        resource: analyzeRequest
+      });
+      return response.data;
+    } catch (err) {
+      console.error('Error:', err);
+    }
+  }
+  async function handle_POST_comments(req, res) {
+    let { zid, xid, uid, txt, pid: initialPid, vote, anon, is_seed } = req.p;
+    let pid = initialPid;
     let currentPid = pid;
-    let vote = req.p.vote;
-    let twitter_tweet_id = req.p.twitter_tweet_id;
-    let quote_twitter_screen_name = req.p.quote_twitter_screen_name;
-    let quote_txt = req.p.quote_txt;
-    let quote_src_url = req.p.quote_src_url;
-    let anon = req.p.anon;
-    let is_seed = req.p.is_seed;
-    let mustBeModerator = !!quote_txt || !!twitter_tweet_id || anon;
-    if (
-      (_.isUndefined(txt) || txt === '') &&
-      (_.isUndefined(twitter_tweet_id) || twitter_tweet_id === '') &&
-      (_.isUndefined(quote_txt) || quote_txt === '')
-    ) {
+    const mustBeModerator = anon;
+    if (!txt || txt === '') {
       fail(res, 400, 'polis_err_param_missing_txt');
       return;
     }
-    if (quote_txt && _.isUndefined(quote_src_url)) {
-      fail(res, 400, 'polis_err_param_missing_quote_src_url');
-      return;
-    }
-    function doGetPid() {
+    async function doGetPid() {
       if (_.isUndefined(pid)) {
-        return getPidPromise(req.p.zid, req.p.uid, true).then((pid) => {
-          if (pid === -1) {
-            return addParticipant(req.p.zid, req.p.uid).then(function (rows) {
-              let ptpt = rows[0];
-              pid = ptpt.pid;
-              currentPid = pid;
-              return pid;
-            });
-          } else {
+        const newPid = await getPidPromise(zid, uid, true);
+        if (newPid === -1) {
+          const rows = await addParticipant(zid, uid);
+          const ptpt = rows[0];
+          pid = ptpt.pid;
+          currentPid = pid;
+          return Number(pid);
+        } else {
+          return newPid;
+        }
+      }
+      return Number(pid);
+    }
+    try {
+      logger.debug('Post comments txt', { zid, pid, txt });
+      const ip =
+        req.headers['x-forwarded-for'] ||
+        req.connection?.remoteAddress ||
+        req.socket?.remoteAddress ||
+        req.connection?.socket?.remoteAddress;
+      const isSpamPromise = isSpam({
+        comment_content: txt,
+        comment_author: uid,
+        permalink: `https://pol.is/${zid}`,
+        user_ip: ip,
+        user_agent: req.headers['user-agent'],
+        referrer: req.headers['referer']
+      }).catch((err) => {
+        logger.error('isSpam failed', err);
+        return false;
+      });
+      const jigsawModerationPromise = analyzeComment(txt);
+      const isModeratorPromise = isModerator(zid, uid);
+      const conversationInfoPromise = getConversationInfo(zid);
+      let shouldCreateXidRecord = false;
+      const pidPromise = (async () => {
+        if (xid) {
+          const xidUser = await getXidStuff(xid, zid);
+          shouldCreateXidRecord = xidUser === 'noXidRecord';
+          if (typeof xidUser === 'object') {
+            uid = xidUser.uid;
+            pid = xidUser.pid;
             return pid;
           }
-        });
-      }
-      return Promise.resolve(pid);
-    }
-    let twitterPrepPromise = Promise.resolve();
-    if (twitter_tweet_id) {
-      twitterPrepPromise = prepForTwitterComment(twitter_tweet_id, zid);
-    } else if (quote_twitter_screen_name) {
-      twitterPrepPromise = prepForQuoteWithTwitterUser(quote_twitter_screen_name, zid);
-    }
-    twitterPrepPromise
-      .then(
-        function (info) {
-          let ptpt = info && info.ptpt;
-          let tweet = info && info.tweet;
-          if (tweet) {
-            logger.debug('Post comments tweet', { txt, tweetTxt: tweet.txt });
-            txt = tweet.text;
-          } else if (quote_txt) {
-            logger.debug('Post comments quote_txt', { txt, quote_txt });
-            txt = quote_txt;
-          } else {
-            logger.debug('Post comments txt', { zid, pid, txt });
-          }
-          let ip =
-            req?.headers?.['x-forwarded-for'] ||
-            req?.connection?.remoteAddress ||
-            req?.socket?.remoteAddress ||
-            req?.connection?.socket.remoteAddress;
-          let isSpamPromise = isSpam({
-            comment_content: txt,
-            comment_author: uid,
-            permalink: 'https://pol.is/' + zid,
-            user_ip: ip,
-            user_agent: req?.headers?.['user-agent'],
-            referrer: req?.headers?.referer
-          });
-          isSpamPromise.catch(function (err) {
-            logger.error('isSpam failed', err);
-          });
-          let isModeratorPromise = isModerator(zid, uid);
-          let conversationInfoPromise = getConversationInfo(zid);
-          let shouldCreateXidRecord = false;
-          let pidPromise;
-          if (ptpt) {
-            pidPromise = Promise.resolve(ptpt.pid);
-          } else {
-            let xidUserPromise = !_.isUndefined(xid) && !_.isNull(xid) ? getXidStuff(xid, zid) : Promise.resolve();
-            pidPromise = xidUserPromise.then((xidUser) => {
-              shouldCreateXidRecord = xidUser === 'noXidRecord';
-              if (typeof xidUser === 'object') {
-                uid = xidUser.uid;
-                pid = xidUser.pid;
-                return pid;
-              } else {
-                return doGetPid().then((pid) => {
-                  if (shouldCreateXidRecord) {
-                    return createXidRecordByZid(zid, uid, xid).then(() => {
-                      return pid;
-                    });
-                  }
-                  return pid;
-                });
-              }
-            });
-          }
-          let commentExistsPromise = commentExists(zid, txt);
-          return Promise.all([pidPromise, conversationInfoPromise, isModeratorPromise, commentExistsPromise]).then(
-            function (results) {
-              let pid = results[0];
-              let conv = results[1];
-              let is_moderator = results[2];
-              let commentExists = results[3];
-              if (!is_moderator && mustBeModerator) {
-                fail(res, 403, 'polis_err_post_comment_auth');
-                return;
-              }
-              if (pid < 0) {
-                fail(res, 500, 'polis_err_post_comment_bad_pid');
-                return;
-              }
-              if (commentExists) {
-                fail(res, 409, 'polis_err_post_comment_duplicate');
-                return;
-              }
-              if (!conv.is_active) {
-                fail(res, 403, 'polis_err_conversation_is_closed');
-                return;
-              }
-              if (_.isUndefined(txt)) {
-                logger.error('polis_err_post_comments_missing_txt');
-                throw 'polis_err_post_comments_missing_txt';
-              }
-              let bad = hasBadWords(txt);
-              return isSpamPromise
-                .then(
-                  function (spammy) {
-                    return spammy;
-                  },
-                  function (err) {
-                    logger.error('spam check failed', err);
-                    return false;
-                  }
-                )
-                .then(function (spammy) {
-                  let velocity = 1;
-                  let active = true;
-                  let classifications = [];
-                  if (bad && conv.profanity_filter) {
-                    active = false;
-                    classifications.push('bad');
-                    logger.info('active=false because (bad && conv.profanity_filter)');
-                  }
-                  if (spammy && conv.spam_filter) {
-                    active = false;
-                    classifications.push('spammy');
-                    logger.info('active=false because (spammy && conv.spam_filter)');
-                  }
-                  if (conv.strict_moderation) {
-                    active = false;
-                    logger.info('active=false because (conv.strict_moderation)');
-                  }
-                  let mod = 0;
-                  if (is_moderator && is_seed) {
-                    mod = polisTypes.mod.ok;
-                    active = true;
-                  }
-                  let authorUid = ptpt ? ptpt.uid : uid;
-                  Promise.all([detectLanguage(txt)]).then((a) => {
-                    let detections = a[0];
-                    let detection = Array.isArray(detections) ? detections[0] : detections;
-                    let lang = detection.language;
-                    let lang_confidence = detection.confidence;
-                    return pgQueryP(
-                      `
-                      INSERT INTO COMMENTS 
-                      (pid, zid, txt, velocity, active, mod, uid, tweet_id, quote_src_url, anon, is_seed, created, tid, lang, lang_confidence) 
-                      VALUES 
-                      ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, default, null, $12, $13) 
-                      RETURNING *;
-                    `,
-                      [
-                        pid,
-                        zid,
-                        txt,
-                        velocity,
-                        active,
-                        mod,
-                        authorUid,
-                        twitter_tweet_id || null,
-                        quote_src_url || null,
-                        anon || false,
-                        is_seed || false,
-                        lang,
-                        lang_confidence
-                      ]
-                    ).then(
-                      function (docs) {
-                        let comment = docs && docs[0];
-                        let tid = comment && comment.tid;
-                        if (bad || spammy || conv.strict_moderation) {
-                          getNumberOfCommentsWithModerationStatus(zid, polisTypes.mod.unmoderated)
-                            .catch(function (err) {
-                              logger.error('polis_err_getting_modstatus_comment_count', err);
-                              return;
-                            })
-                            .then(function (n) {
-                              if (n === 0) {
-                                return;
-                              }
-                              pgQueryP_readOnly(
-                                'select * from users where site_id = (select site_id from page_ids where zid = ($1)) UNION select * from users where uid = ($2);',
-                                [zid, conv.owner]
-                              ).then(function (users) {
-                                let uids = _.pluck(users, 'uid');
-                                uids.forEach(function (uid) {
-                                  sendCommentModerationEmail(req, uid, zid, n);
-                                });
-                              });
-                            });
-                        } else {
-                          addNotificationTask(zid);
-                        }
-                        if (is_seed && _.isUndefined(vote) && zid <= 17037) {
-                          vote = 0;
-                        }
-                        let createdTime = comment.created;
-                        let votePromise = _.isUndefined(vote)
-                          ? Promise.resolve()
-                          : votesPost(uid, pid, zid, tid, xid, vote, 0);
-                        return votePromise.then(
-                          function (o) {
-                            if (o && o.vote && o.vote.created) {
-                              createdTime = o.vote.created;
-                            }
-                            setTimeout(function () {
-                              updateConversationModifiedTime(zid, createdTime);
-                              updateLastInteractionTimeForConversation(zid, uid);
-                              if (!_.isUndefined(vote)) {
-                                updateVoteCount(zid, pid);
-                              }
-                            }, 100);
-                            res.json({
-                              tid: tid,
-                              currentPid: currentPid
-                            });
-                          },
-                          function (err) {
-                            fail(res, 500, 'polis_err_vote_on_create', err);
-                          }
-                        );
-                      },
-                      function (err) {
-                        if (err.code === '23505' || err.code === 23505) {
-                          fail(res, 409, 'polis_err_post_comment_duplicate', err);
-                        } else {
-                          fail(res, 500, 'polis_err_post_comment', err);
-                        }
-                      }
-                    );
-                  });
-                });
-            },
-            function (errors) {
-              if (errors[0]) {
-                fail(res, 500, 'polis_err_getting_pid', errors[0]);
-                return;
-              }
-              if (errors[1]) {
-                fail(res, 500, 'polis_err_getting_conv_info', errors[1]);
-                return;
-              }
-            }
-          );
-        },
-        function (err) {
-          fail(res, 500, 'polis_err_fetching_tweet', err);
         }
-      )
-      .catch(function (err) {
-        fail(res, 500, 'polis_err_post_comment_misc', err);
+        const newPid = await doGetPid();
+        if (shouldCreateXidRecord) {
+          await createXidRecordByZid(zid, uid, xid, null, null, null);
+        }
+        return newPid;
+      })();
+      const commentExistsPromise = commentExists(zid, txt);
+      const [finalPid, conv, is_moderator, commentExistsAlready, spammy, jigsawResponse] = await Promise.all([
+        pidPromise,
+        conversationInfoPromise,
+        isModeratorPromise,
+        commentExistsPromise,
+        isSpamPromise,
+        jigsawModerationPromise
+      ]);
+      if (!is_moderator && mustBeModerator) {
+        fail(res, 403, 'polis_err_post_comment_auth');
+        return;
+      }
+      if (finalPid && finalPid < 0) {
+        fail(res, 500, 'polis_err_post_comment_bad_pid');
+        return;
+      }
+      if (commentExistsAlready) {
+        fail(res, 409, 'polis_err_post_comment_duplicate');
+        return;
+      }
+      if (!conv.is_active) {
+        fail(res, 403, 'polis_err_conversation_is_closed');
+        return;
+      }
+      const bad = hasBadWords(txt);
+      const velocity = 1;
+      const jigsawToxicityThreshold = 0.8;
+      let active = true;
+      const classifications = [];
+      console.log('JIGSAW RESPONSE', txt);
+      console.log(
+        `Jigsaw toxicty Score for comment "${txt}": ${jigsawResponse?.attributeScores?.TOXICITY?.summaryScore?.value}`
+      );
+      if (
+        conv.profanity_filter &&
+        jigsawResponse?.attributeScores?.TOXICITY?.summaryScore?.value > jigsawToxicityThreshold
+      ) {
+        active = false;
+        classifications.push('bad');
+        logger.info('active=false because (bad && conv.profanity_filter)');
+      }
+      if (spammy && conv.spam_filter) {
+        active = false;
+        classifications.push('spammy');
+        logger.info('active=false because (spammy && conv.spam_filter)');
+      }
+      if (conv.strict_moderation) {
+        active = false;
+        logger.info('active=false because (conv.strict_moderation)');
+      }
+      let mod = 0;
+      if (is_moderator && is_seed) {
+        mod = polisTypes.mod.ok;
+        active = true;
+      }
+      const [detections] = await Promise.all([detectLanguage(txt)]);
+      const detection = Array.isArray(detections) ? detections[0] : detections;
+      const lang = detection.language;
+      const lang_confidence = detection.confidence;
+      const insertedComment = await pgQueryP(
+        `INSERT INTO COMMENTS
+        (pid, zid, txt, velocity, active, mod, uid, anon, is_seed, created, tid, lang, lang_confidence)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, default, null, $10, $11)
+        RETURNING *;`,
+        [finalPid, zid, txt, velocity, active, mod, uid, anon || false, is_seed || false, lang, lang_confidence]
+      );
+      const comment = insertedComment[0];
+      const tid = comment.tid;
+      if (bad || spammy || conv.strict_moderation) {
+        try {
+          const n = await getNumberOfCommentsWithModerationStatus(zid, polisTypes.mod.unmoderated);
+          if (n !== 0) {
+            const users = await pgQueryP_readOnly(
+              'SELECT * FROM users WHERE site_id = (SELECT site_id FROM page_ids WHERE zid = $1) UNION SELECT * FROM users WHERE uid = $2;',
+              [zid, conv.owner]
+            );
+            const uids = users.map((user) => user.uid);
+            uids.forEach((uid) => sendCommentModerationEmail(req, Number(uid), zid, n));
+          }
+        } catch (err) {
+          logger.error('polis_err_getting_modstatus_comment_count', err);
+        }
+      } else {
+        addNotificationTask(zid);
+      }
+      if (is_seed && _.isUndefined(vote) && Number(zid) <= 17037) {
+        vote = 0;
+      }
+      let createdTime = comment.created;
+      if (!_.isUndefined(vote)) {
+        try {
+          const voteResult = await votesPost(uid, finalPid, zid, tid, xid, vote, 0);
+          if (voteResult?.vote?.created) {
+            createdTime = voteResult.vote.created;
+          }
+        } catch (err) {
+          fail(res, 500, 'polis_err_vote_on_create', err);
+          return;
+        }
+      }
+      setTimeout(() => {
+        updateConversationModifiedTime(zid, createdTime);
+        updateLastInteractionTimeForConversation(zid, uid);
+        if (!_.isUndefined(vote)) {
+          updateVoteCount(zid, finalPid);
+        }
+      }, 100);
+      res.json({
+        tid: tid,
+        currentPid: currentPid
       });
+    } catch (err) {
+      if (err.code === '23505' || err.code === 23505) {
+        fail(res, 409, 'polis_err_post_comment_duplicate', err);
+      } else {
+        fail(res, 500, 'polis_err_post_comment', err);
+      }
+    }
   }
   function handle_GET_votes_me(req, res) {
     getPid(req.p.zid, req.p.uid, function (err, pid) {
@@ -4348,7 +4035,7 @@ Email verified! You can close this tab or hit the back button.
     c.randomN = randomN;
     return c;
   }
-  async function getNextPrioritizedComment(zid, pid, withoutTids, include_social) {
+  function getNextPrioritizedComment(zid, pid, withoutTids, include_social) {
     let params = {
       zid: zid,
       not_voted_by_pid: pid,
@@ -4362,7 +4049,11 @@ Email verified! You can close this tab or hit the back button.
         let comments = results[0];
         let math = results[1];
         let numberOfCommentsRemainingRows = results[2];
-        logger.debug('getNextPrioritizedComment intermediate results:', { zid, pid, numberOfCommentsRemainingRows });
+        logger.debug('getNextPrioritizedComment intermediate results:', {
+          zid,
+          pid,
+          numberOfCommentsRemainingRows
+        });
         if (!comments || !comments.length) {
           return null;
         } else if (!numberOfCommentsRemainingRows || !numberOfCommentsRemainingRows.length) {
@@ -4381,7 +4072,7 @@ Email verified! You can close this tab or hit the back button.
   function getCommentTranslations(zid, tid) {
     return dbPgQuery.queryP('select * from comment_translations where zid = ($1) and tid = ($2);', [zid, tid]);
   }
-  async function getNextComment(zid, pid, withoutTids, include_social, lang) {
+  function getNextComment(zid, pid, withoutTids, include_social, lang) {
     return getNextPrioritizedComment(zid, pid, withoutTids, include_social).then((c) => {
       if (lang && c) {
         const firstTwoCharsOfLang = lang.substr(0, 2);
@@ -4408,10 +4099,8 @@ Email verified! You can close this tab or hit the back button.
   }
   function addNoMoreCommentsRecord(zid, pid) {
     return pgQueryP(
-      `
-        insert into event_ptpt_no_more_comments (zid, pid, votes_placed) 
-        values ($1, $2, (select count(*) from votes where zid = $1 and pid = $2));
-      `,
+      'insert into event_ptpt_no_more_comments (zid, pid, votes_placed) values ($1, $2, ' +
+        '(select count(*) from votes where zid = ($1) and pid = ($2)))',
       [zid, pid]
     );
   }
@@ -4565,27 +4254,21 @@ Email verified! You can close this tab or hit the back button.
       return;
     }
     let permanent_cookie = getPermanentCookieAndEnsureItIsSet(req, res);
-    let pidReadyPromise;
-    if (_.isUndefined(req.p.pid)) {
-      pidReadyPromise = addParticipantAndMetadata(req.p.zid, req.p.uid, req, permanent_cookie).then(function (rows) {
-        let ptpt = rows[0];
-        pid = ptpt.pid;
-      });
-    } else {
-      pidReadyPromise = Promise.resolve();
-    }
+    let pidReadyPromise = _.isUndefined(req.p.pid)
+      ? addParticipantAndMetadata(req.p.zid, req.p.uid, req, permanent_cookie).then(function (rows) {
+          let ptpt = rows[0];
+          pid = ptpt.pid;
+        })
+      : Promise.resolve();
     pidReadyPromise
-      .then(async function () {
+      .then(function () {
         let vote;
-        let pidReadyPromise;
-        if (_.isUndefined(pid)) {
-          pidReadyPromise = addParticipant(zid, uid).then(function (rows) {
-            let ptpt = rows[0];
-            pid = ptpt.pid;
-          });
-        } else {
-          pidReadyPromise = Promise.resolve();
-        }
+        let pidReadyPromise = _.isUndefined(pid)
+          ? addParticipant(zid, uid).then(function (rows) {
+              let ptpt = rows[0];
+              pid = ptpt.pid;
+            })
+          : Promise.resolve();
         return pidReadyPromise
           .then(function () {
             return votesPost(uid, pid, zid, req.p.tid, req.p.xid, req.p.vote, req.p.weight);
@@ -4608,7 +4291,11 @@ Email verified! You can close this tab or hit the back button.
             return getNextComment(zid, pid, [], true, lang);
           })
           .then(function (nextComment) {
-            logger.debug('handle_POST_votes nextComment:', { zid, pid, nextComment });
+            logger.debug('handle_POST_votes nextComment:', {
+              zid,
+              pid,
+              nextComment
+            });
             let result = {};
             if (nextComment) {
               result.nextComment = nextComment;
@@ -4650,42 +4337,38 @@ Email verified! You can close this tab or hit the back button.
         }
       });
   }
-  async function handle_POST_ptptCommentMod(req, res) {
+  function handle_POST_ptptCommentMod(req, res) {
     let zid = req.p.zid;
     let pid = req.p.pid;
     let uid = req.p.uid;
     return pgQueryP(
-      `
-        insert into crowd_mod (
-          zid, 
-          pid, 
-          tid, 
-          as_abusive, 
-          as_factual, 
-          as_feeling, 
-          as_important, 
-          as_notfact, 
-          as_notgoodidea, 
-          as_notmyfeeling, 
-          as_offtopic, 
-          as_spam, 
-          as_unsure
-        ) values (
-          $1, 
-          $2, 
-          $3, 
-          $4, 
-          $5, 
-          $6, 
-          $7, 
-          $8, 
-          $9, 
-          $10, 
-          $11, 
-          $12, 
-          $13
-        );
-      `,
+      'insert into crowd_mod (' +
+        'zid, ' +
+        'pid, ' +
+        'tid, ' +
+        'as_abusive, ' +
+        'as_factual, ' +
+        'as_feeling, ' +
+        'as_important, ' +
+        'as_notfact, ' +
+        'as_notgoodidea, ' +
+        'as_notmyfeeling, ' +
+        'as_offtopic, ' +
+        'as_spam, ' +
+        'as_unsure) values (' +
+        '$1, ' +
+        '$2, ' +
+        '$3, ' +
+        '$4, ' +
+        '$5, ' +
+        '$6, ' +
+        '$7, ' +
+        '$8, ' +
+        '$9, ' +
+        '$10, ' +
+        '$11, ' +
+        '$12, ' +
+        '$13);',
       [
         req.p.zid,
         req.p.pid,
@@ -4815,7 +4498,7 @@ Email verified! You can close this tab or hit the back button.
   }
   function verifyMetadataAnswersExistForEachQuestion(zid) {
     let errorcode = 'polis_err_missing_metadata_answers';
-    return new Promise(function (resolve, reject) {
+    return new Promise((resolve, reject) => {
       pgQuery_readOnly(
         'select pmqid from participant_metadata_questions where zid = ($1);',
         [zid],
@@ -4832,10 +4515,9 @@ Email verified! You can close this tab or hit the back button.
             return Number(row.pmqid);
           });
           pgQuery_readOnly(
-            `
-            select pmaid, pmqid from participant_metadata_answers 
-            where pmqid in (${pmqids.join(',')}) and alive = TRUE and zid = $1;
-          `,
+            'select pmaid, pmqid from participant_metadata_answers where pmqid in (' +
+              pmqids.join(',') +
+              ') and alive = TRUE and zid = ($1);',
             [zid],
             function (err, results) {
               if (err) {
@@ -4875,22 +4557,28 @@ Email verified! You can close this tab or hit the back button.
     let active = req.p.active;
     let mod = req.p.mod;
     let is_meta = req.p.is_meta;
+    console.log(`Attempting to update comment. zid: ${zid}, tid: ${tid}, uid: ${uid}`);
     isModerator(zid, uid)
       .then(function (isModerator) {
+        console.log(`isModerator result: ${isModerator}`);
         if (isModerator) {
           moderateComment(zid, tid, active, mod, is_meta).then(
             function () {
+              console.log('Comment moderated successfully');
               res.status(200).json({});
             },
             function (err) {
+              console.error('Error in moderateComment:', err);
               fail(res, 500, 'polis_err_update_comment', err);
             }
           );
         } else {
+          console.log('User is not a moderator');
           fail(res, 403, 'polis_err_update_comment_auth');
         }
       })
       .catch(function (err) {
+        console.error('Error in isModerator:', err);
         fail(res, 500, 'polis_err_update_comment', err);
       });
   }
@@ -4906,12 +4594,8 @@ Email verified! You can close this tab or hit the back button.
           return fail(res, 403, 'polis_err_POST_reportCommentSelections_auth');
         }
         return pgQueryP(
-          `
-          insert into report_comment_selections (rid, tid, selection, zid, modified) 
-          values ($1, $2, $3, $4, now_as_millis()) 
-          on conflict (rid, tid) do update 
-          set selection = $3, zid  = $4, modified = now_as_millis();
-        `,
+          'insert into report_comment_selections (rid, tid, selection, zid, modified) values ($1, $2, $3, $4, now_as_millis()) ' +
+            'on conflict (rid, tid) do update set selection = ($3), zid  = ($4), modified = now_as_millis();',
           [rid, tid, selection, zid]
         )
           .then(() => {
@@ -5126,21 +4810,18 @@ Email verified! You can close this tab or hit the back button.
                         sendEmailByUid(
                           req.p.uid,
                           'Conversation created',
-                          `Hi ${hname},
-
-                          
-                            Here's a link to the conversation you just created. Use it to invite participants to the conversation. Share it by whatever network you prefer - Gmail, Facebook, Twitter, etc., or just post it to your website or blog. Try it now! Click this link to go to your conversation:
-                            ${url}
-
-
-                            With gratitude,
-
-
-                            The team at pol.is
-                          `
-                            .split('\n')
-                            .map((line) => line.trimStart())
-                            .join('\n')
+                          'Hi ' +
+                            hname +
+                            ',\n' +
+                            '\n' +
+                            "Here's a link to the conversation you just created. Use it to invite participants to the conversation. Share it by whatever network you prefer - Gmail, Facebook, Twitter, etc., or just post it to your website or blog. Try it now! Click this link to go to your conversation:" +
+                            '\n' +
+                            url +
+                            '\n' +
+                            '\n' +
+                            'With gratitude,\n' +
+                            '\n' +
+                            'The team at pol.is\n'
                         ).catch(function (err) {
                           logger.error('polis_err_sending_conversation_created_email', err);
                         });
@@ -5500,7 +5181,7 @@ Email verified! You can close this tab or hit the back button.
       firstTwoCharsOfLang
     ]);
   }
-  async function getConversationTranslationsMinimal(zid, lang) {
+  function getConversationTranslationsMinimal(zid, lang) {
     if (!lang) {
       return Promise.resolve([]);
     }
@@ -5514,7 +5195,7 @@ Email verified! You can close this tab or hit the back button.
       return rows;
     });
   }
-  async function getOneConversation(zid, uid, lang) {
+  function getOneConversation(zid, uid, lang) {
     return Promise.all([
       pgQueryP_readOnly(
         'select * from conversations left join  (select uid, site_id from users) as u on conversations.owner = u.uid where conversations.zid = ($1);',
@@ -5713,13 +5394,13 @@ Email verified! You can close this tab or hit the back button.
       });
     });
   }
-  async function createReport(zid) {
+  function createReport(zid) {
     return generateTokenP(20, false).then(function (report_id) {
       report_id = 'r' + report_id;
       return pgQueryP('insert into reports (zid, report_id) values ($1, $2);', [zid, report_id]);
     });
   }
-  async function handle_POST_reports(req, res) {
+  function handle_POST_reports(req, res) {
     let zid = req.p.zid;
     let uid = req.p.uid;
     return isModerator(zid, uid)
@@ -5735,7 +5416,7 @@ Email verified! You can close this tab or hit the back button.
         fail(res, 500, 'polis_err_post_reports_misc', err);
       });
   }
-  async function handle_PUT_reports(req, res) {
+  function handle_PUT_reports(req, res) {
     let rid = req.p.rid;
     let uid = req.p.uid;
     let zid = req.p.zid;
@@ -5986,18 +5667,11 @@ Email verified! You can close this tab or hit the back button.
               return;
             }
             let zid = result && result.rows && result.rows[0] && result.rows[0].zid;
-            let zinvitePromise;
-            if (req.p.conversation_id) {
-              zinvitePromise = Conversation.getZidFromConversationId(req.p.conversation_id).then((zid) => {
-                if (zid === 0) {
-                  return req.p.conversation_id;
-                } else {
-                  return null;
-                }
-              });
-            } else {
-              zinvitePromise = generateAndRegisterZinvite(zid, generateShortUrl);
-            }
+            const zinvitePromise = req.p.conversation_id
+              ? Conversation.getZidFromConversationId(req.p.conversation_id).then((zid) => {
+                  return zid === 0 ? req.p.conversation_id : null;
+                })
+              : generateAndRegisterZinvite(zid, generateShortUrl);
             zinvitePromise
               .then(function (zinvite) {
                 if (zinvite === null) {
@@ -6028,12 +5702,13 @@ Email verified! You can close this tab or hit the back button.
     }
     function doneChecking() {
       pgQuery_readOnly(
-        `
-        select pid from participants where zid = $1 and pid not in 
-        (select pid from participant_metadata_choices where alive = TRUE and pmaid in 
-        (select pmaid from participant_metadata_answers where alive = TRUE and zid = $2 and pmaid not in (${pmaids.join(',')}))
-        );
-      `,
+        'select pid from participants where zid = ($1) and pid not in ' +
+          '(select pid from participant_metadata_choices where alive = TRUE and pmaid in ' +
+          '(select pmaid from participant_metadata_answers where alive = TRUE and zid = ($2) and pmaid not in (' +
+          pmaids.join(',') +
+          '))' +
+          ')' +
+          ';',
         [zid, zid],
         function (err, results) {
           if (err) {
@@ -6138,8 +5813,8 @@ Thanks for using Polis!
     return new Promise(function (resolve, reject) {
       oauth.post(
         'https://api.twitter.com/oauth/request_token',
-        undefined, // oauth_token
-        undefined, // oauth_token_secret
+        void 0,
+        void 0,
         body,
         'multipart/form-data',
         function (err, data, res) {
@@ -6180,8 +5855,8 @@ Thanks for using Polis!
     return new Promise(function (resolve, reject) {
       oauth.post(
         'https://api.twitter.com/oauth/access_token',
-        undefined, // oauth_token
-        undefined, // oauth_token_secret
+        void 0,
+        void 0,
         body,
         'multipart/form-data',
         function (err, data, res) {
@@ -6229,8 +5904,8 @@ Thanks for using Polis!
       }
       oauth.post(
         'https://api.twitter.com/1.1/users/lookup.json',
-        undefined, // oauth_token
-        undefined, // oauth_token_secret
+        void 0,
+        void 0,
         params,
         'multipart/form-data',
         function (err, data, res) {
@@ -6259,8 +5934,8 @@ Thanks for using Polis!
     return new MPromise('getTwitterTweet', function (resolve, reject) {
       oauth.get(
         'https://api.twitter.com/1.1/statuses/show.json?id=' + twitter_tweet_id,
-        undefined, // oauth_token
-        undefined, // oauth_token_secret
+        void 0,
+        void 0,
         function (err, data, res) {
           if (err) {
             logger.error('get twitter tweet failed', err);
@@ -6288,8 +5963,8 @@ Thanks for using Polis!
     return new Promise(function (resolve, reject) {
       oauth.post(
         'https://api.twitter.com/1.1/users/lookup.json',
-        undefined, // oauth_token
-        undefined, // oauth_token_secret
+        void 0,
+        void 0,
         {
           user_id: list_of_twitter_user_id.join(',')
         },
@@ -6311,19 +5986,15 @@ Thanks for using Polis!
     });
   }
   function switchToUser(req, res, uid) {
-    return new Promise(function (resolve, reject) {
-      startSession(uid, function (errSess, token) {
+    return new Promise((resolve, reject) => {
+      startSession(uid, (errSess, token) => {
         if (errSess) {
           reject(errSess);
           return;
         }
         addCookies(req, res, token, uid)
-          .then(function () {
-            resolve();
-          })
-          .catch(function (err) {
-            reject('polis_err_adding_cookies');
-          });
+          .then(() => resolve())
+          .catch(() => reject('polis_err_adding_cookies'));
       });
     });
   }
@@ -6347,7 +6018,7 @@ Thanks for using Polis!
       );
     });
   }
-  async function updateSomeTwitterUsers() {
+  function updateSomeTwitterUsers() {
     return pgQueryP_readOnly(
       'select uid, twitter_user_id from twitter_users where modified < (now_as_millis() - 30*60*1000) order by modified desc limit 100;'
     ).then(function (results) {
@@ -6433,7 +6104,7 @@ Thanks for using Polis!
     });
   }
   function addParticipantByTwitterUserId(query, o, zid, tweet) {
-    async function addParticipantAndFinish(uid, twitterUser, tweet) {
+    function addParticipantAndFinish(uid, twitterUser, tweet) {
       return addParticipant(zid, uid).then(function (rows) {
         let ptpt = rows[0];
         return {
@@ -6462,7 +6133,7 @@ Thanks for using Polis!
             return addParticipantAndFinish(uid, twitterUser, tweet);
           });
       } else {
-        return createUserFromTwitterInfo(o).then(async function (twitterUser) {
+        return createUserFromTwitterInfo(o).then(function (twitterUser) {
           let uid = twitterUser.uid;
           return addParticipant(zid, uid).then(function (rows) {
             let ptpt = rows[0];
@@ -6476,32 +6147,29 @@ Thanks for using Polis!
       }
     });
   }
-  async function addParticipant(zid, uid) {
-    return pgQueryP('INSERT INTO participants_extended (zid, uid) VALUES ($1, $2);', [zid, uid]).then(() => {
-      return pgQueryP('INSERT INTO participants (pid, zid, uid, created) VALUES (NULL, $1, $2, default) RETURNING *;', [
-        zid,
-        uid
-      ]);
-    });
-  }
+  const addParticipant = async (zid, uid) => {
+    await pgQueryP('INSERT INTO participants_extended (zid, uid) VALUES ($1, $2);', [zid, uid]);
+    return pgQueryP('INSERT INTO participants (pid, zid, uid, created) VALUES (NULL, $1, $2, default) RETURNING *;', [
+      zid,
+      uid
+    ]);
+  };
   function getAndInsertTwitterUser(o, uid) {
     return getTwitterUserInfo(o, false).then(function (userString) {
       const u = JSON.parse(userString)[0];
       return pgQueryP(
-        `
-        insert into twitter_users (
-          uid,
-          twitter_user_id,
-          screen_name,
-          name,
-          followers_count,
-          friends_count,
-          verified,
-          profile_image_url_https,
-          location,
-          response
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning *;
-      `,
+        'insert into twitter_users (' +
+          'uid,' +
+          'twitter_user_id,' +
+          'screen_name,' +
+          'name,' +
+          'followers_count,' +
+          'friends_count,' +
+          'verified,' +
+          'profile_image_url_https,' +
+          'location,' +
+          'response' +
+          ') VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning *;',
         [
           uid,
           u.id,
@@ -6553,20 +6221,18 @@ Thanks for using Polis!
               function (userStringPayload) {
                 const u = JSON.parse(userStringPayload)[0];
                 return pgQueryP(
-                  `
-                  insert into twitter_users (
-                    uid,
-                    twitter_user_id,
-                    screen_name,
-                    name,
-                    followers_count,
-                    friends_count,
-                    verified,
-                    profile_image_url_https,
-                    location,
-                    response
-                  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
-                `,
+                  'insert into twitter_users (' +
+                    'uid,' +
+                    'twitter_user_id,' +
+                    'screen_name,' +
+                    'name,' +
+                    'followers_count,' +
+                    'friends_count,' +
+                    'verified,' +
+                    'profile_image_url_https,' +
+                    'location,' +
+                    'response' +
+                    ') VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);',
                   [
                     uid,
                     u.id,
@@ -6802,7 +6468,7 @@ Thanks for using Polis!
     let val = math_tick + ':' + votes;
     votesForZidPidCache.set(key, val);
   }
-  async function getVotesForZidPidsWithTimestampCheck(zid, pids, math_tick) {
+  function getVotesForZidPidsWithTimestampCheck(zid, pids, math_tick) {
     let cachedVotes = pids.map(function (pid) {
       return {
         pid: pid,
@@ -6838,7 +6504,7 @@ Thanks for using Polis!
       return Object.assign(newPidToVotes, cachedPidToVotes);
     });
   }
-  async function getVotesForPids(zid, pids) {
+  function getVotesForPids(zid, pids) {
     if (pids.length === 0) {
       return Promise.resolve([]);
     }
@@ -6891,7 +6557,7 @@ Thanks for using Polis!
   function getLocationsForParticipants(zid) {
     return pgQueryP_readOnly('select * from participant_locations where zid = ($1);', [zid]);
   }
-  async function getPidsForGid(zid, gid, math_tick) {
+  function getPidsForGid(zid, gid, math_tick) {
     return Promise.all([getPca(zid, math_tick), getBidIndexToPidMapping(zid, math_tick)]).then(function (o) {
       if (!o[0] || !o[0].asPOJO) {
         return [];
@@ -6943,7 +6609,7 @@ Thanks for using Polis!
         .catch(reject);
     });
   }
-  async function geoCode(locationString) {
+  function geoCode(locationString) {
     return pgQueryP('select * from geolocation_cache where location = ($1);', [locationString]).then(function (rows) {
       if (!rows || !rows.length) {
         return geoCodeWithGoogleApi(locationString).then(function (result) {
@@ -6974,7 +6640,7 @@ Thanks for using Polis!
     maxAge: 1000 * 60 * 30,
     max: 999
   });
-  async function getTwitterShareCountForConversation(conversation_id) {
+  function getTwitterShareCountForConversation(conversation_id) {
     let cached = twitterShareCountCache.get(conversation_id);
     if (cached) {
       return Promise.resolve(cached);
@@ -7000,7 +6666,7 @@ Thanks for using Polis!
     maxAge: 1000 * 60 * 30,
     max: 999
   });
-  async function getFacebookShareCountForConversation(conversation_id) {
+  function getFacebookShareCountForConversation(conversation_id) {
     let cached = fbShareCountCache.get(conversation_id);
     if (cached) {
       return Promise.resolve(cached);
@@ -7294,18 +6960,18 @@ Thanks for using Polis!
         fail(res, 500, 'polis_err_famous_proj_get1', err);
       });
   }
-  async function doFamousQuery(o, req) {
+  function doFamousQuery(o, req) {
     let uid = o?.uid;
     let zid = o?.zid;
     let math_tick = o?.math_tick;
     let hardLimit = _.isUndefined(o?.ptptoiLimit) ? 30 : o?.ptptoiLimit;
     let mod = 0;
-    async function getAuthorUidsOfFeaturedComments() {
-      return getPca(zid, 0).then(function (pcaData) {
-        if (!pcaData) {
+    function getAuthorUidsOfFeaturedComments() {
+      return getPca(zid, 0).then((pcaResult) => {
+        if (!pcaResult || typeof pcaResult !== 'object' || pcaResult === null || !('asPOJO' in pcaResult)) {
           return [];
         }
-        pcaData = pcaData.asPOJO;
+        const pcaData = pcaResult.asPOJO;
         pcaData.consensus = pcaData.consensus || {};
         pcaData.consensus.agree = pcaData.consensus.agree || [];
         pcaData.consensus.disagree = pcaData.consensus.disagree || [];
@@ -7416,7 +7082,7 @@ Thanks for using Polis!
       fail(res, 500, 'polis_err_twitter_user_info_get', err);
     });
   }
-  async function doSendEinvite(req, email) {
+  function doSendEinvite(req, email) {
     return generateTokenP(30, false).then(function (einvite) {
       return pgQueryP('insert into einvites (email, einvite) values ($1, $2);', [email, einvite]).then(function (rows) {
         return sendEinviteEmail(req, email, einvite);
@@ -7454,11 +7120,8 @@ Thanks for using Polis!
     const github_id = req.p.github_id;
     const company_name = req.p.company_name;
     pgQueryP(
-      `
-        insert into contributor_agreement_signatures 
-        (uid, agreement_version, github_id, name, email, company_name) 
-        values ($1, $2, $3, $4, $5, $6);
-      `,
+      'insert into contributor_agreement_signatures (uid, agreement_version, github_id, name, email, company_name) ' +
+        'values ($1, $2, $3, $4, $5, $6);',
       [uid, agreement_version, github_id, name, email, company_name]
     ).then(
       () => {
@@ -7493,7 +7156,7 @@ Thanks for using Polis!
       return buildConversationUrl(req, zinvite);
     });
   }
-  async function createOneSuzinvite(xid, zid, owner, generateSingleUseUrl) {
+  function createOneSuzinvite(xid, zid, owner, generateSingleUseUrl) {
     return generateSUZinvites(1).then(function (suzinviteArray) {
       let suzinvite = suzinviteArray[0];
       return pgQueryP('INSERT INTO suzinvites (suzinvite, xid, zid, owner) VALUES ($1, $2, $3, $4);', [
@@ -7614,7 +7277,7 @@ Thanks for using Polis!
         fail(res, 500, 'polis_err_getting_conversation_info', err);
       });
   }
-  async function initializeImplicitConversation(site_id, page_id, o) {
+  function initializeImplicitConversation(site_id, page_id, o) {
     return pgQueryP_readOnly('select uid from users where site_id = ($1) and site_owner = TRUE;', [site_id]).then(
       function (rows) {
         if (!rows || !rows.length) {
@@ -7673,7 +7336,7 @@ Thanks for using Polis!
       }
     );
   }
-  async function sendImplicitConversationCreatedEmails(site_id, page_id, url, modUrl, seedUrl) {
+  function sendImplicitConversationCreatedEmails(site_id, page_id, url, modUrl, seedUrl) {
     let body =
       '' +
       'Conversation created!' +
@@ -7935,33 +7598,33 @@ Thanks for using Polis!
   function fetchThirdPartyCookieTestPt1(req, res) {
     res.set({ 'Content-Type': 'text/html' });
     res.send(
-      Buffer.from(`
-      <body>
-      <script>
-        document.cookie="thirdparty=yes; Max-Age=3600; SameSite=None; Secure";
-        document.location="thirdPartyCookieTestPt2.html";
-      </script>
-      </body>
-      `)
+      Buffer.from(
+        '<body>\n' +
+          '<script>\n' +
+          '  document.cookie="thirdparty=yes; Max-Age=3600; SameSite=None; Secure";\n' +
+          '  document.location="thirdPartyCookieTestPt2.html";\n' +
+          '</script>\n' +
+          '</body>'
+      )
     );
   }
   function fetchThirdPartyCookieTestPt2(req, res) {
     res.set({ 'Content-Type': 'text/html' });
     res.send(
-      Buffer.from(`
-      <body>
-      <script>
-        if (window.parent) {
-        if (/thirdparty=yes/.test(document.cookie)) {
-          window.parent.postMessage('MM:3PCsupported', '*');
-        } else {
-          window.parent.postMessage('MM:3PCunsupported', '*');
-        }
-        document.cookie = 'thirdparty=; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
-        }
-      </script>
-      </body>
-      `)
+      Buffer.from(
+        '<body>\n' +
+          '<script>\n' +
+          '  if (window.parent) {\n' +
+          '   if (/thirdparty=yes/.test(document.cookie)) {\n' +
+          "     window.parent.postMessage('MM:3PCsupported', '*');\n" +
+          '   } else {\n' +
+          "     window.parent.postMessage('MM:3PCunsupported', '*');\n" +
+          '   }\n' +
+          "   document.cookie = 'thirdparty=; expires=Thu, 01 Jan 1970 00:00:01 GMT;';\n" +
+          '  }\n' +
+          '</script>\n' +
+          '</body>'
+      )
     );
   }
   function makeFileFetcher(hostname, port, path, headers, preloadData) {
@@ -8095,11 +7758,17 @@ Thanks for using Polis!
           'Content-Type': 'text/html'
         });
         let title = info.topic || info.created;
-        res.send(`
-          <a href='https://pol.is/${conversation_id}' target='_blank'>${title}</a>
-          <p><a href='https://pol.is/m${conversation_id}' target='_blank'>moderate</a></p>
-          ${info.description ? `<p>${info.description}</p>` : ''}
-        `);
+        res.send(
+          "<a href='https://pol.is/" +
+            conversation_id +
+            "' target='_blank'>" +
+            title +
+            '</a>' +
+            "<p><a href='https://pol.is/m" +
+            conversation_id +
+            "' target='_blank'>moderate</a></p>" +
+            (info.description ? '<p>' + info.description + '</p>' : '')
+        );
       })
       .catch(function (err) {
         fail(res, 500, 'polis_err_fetching_conversation_info', err);
@@ -8258,6 +7927,7 @@ Thanks for using Polis!
     handle_GET_math_correlationMatrix,
     handle_GET_dataExport,
     handle_GET_dataExport_results,
+    handle_GET_reportExport,
     handle_GET_domainWhitelist,
     handle_GET_dummyButton,
     handle_GET_einvites,

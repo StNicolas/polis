@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import _ from 'underscore';
-import pg from '../db/pg-query.js';
+import pg from '../db/pg-query';
 function generateHashedPassword(password, callback) {
   bcrypt.genSalt(12, function (errSalt, salt) {
     if (errSalt) {
@@ -22,7 +22,7 @@ function checkPassword(uid, password) {
       if (!rows || !rows.length) {
         return null;
       } else if (!rows[0].pwhash) {
-        return;
+        return void 0;
       }
       let hashedPassword = rows[0].pwhash;
       return new Promise(function (resolve, reject) {

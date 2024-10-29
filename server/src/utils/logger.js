@@ -1,5 +1,5 @@
 import { createLogger, format, transports } from 'winston';
-import Config from '../config.js';
+import Config from '../config';
 const logLevel = Config.logLevel || 'info';
 const logToFile = Config.logToFile;
 const consoleTransport = new transports.Console({
