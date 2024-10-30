@@ -1,20 +1,20 @@
 {
   "compilerOptions": {
-    "allowJs": true,
     "declaration": false,
-    "emitDecoratorMetadata": false,
-    "experimentalDecorators": false,
     "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
+    "forceConsistentCasingInFileNames": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "noEmitOnError": false,
     "noImplicitAny": false,
     "outDir": "./dist",
-    "preserveConstEnums": true,
     "removeComments": true,
     "rootDir": "./",
+    "skipLibCheck": true,
     "sourceMap": false,
-    "target": "esnext"
+    "strict": false,
+    "target": "ES2022",
+    "verbatimModuleSyntax": false
   },
   "include": ["app.ts", "src-ts/**/*"]
 }
