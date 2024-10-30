@@ -1,8 +1,8 @@
-'use strict';
 import akismetLib from 'akismet';
 import AWS from 'aws-sdk';
-import badwords from 'badwords/object';
-import { Promise as BluebirdPromise } from 'bluebird';
+import badwords from 'badwords/object.js';
+import bluebird from 'bluebird';
+const { Promise: BluebirdPromise } = bluebird;
 import http from 'http';
 import httpProxy from 'http-proxy';
 import async from 'async';
