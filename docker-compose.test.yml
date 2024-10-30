@@ -20,3 +20,8 @@ services:
   server:
     environment:
       - GOOGLE_CREDENTIALS_BASE64
+
+  postgres:
+    restart: no
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
