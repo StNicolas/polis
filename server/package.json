@@ -12,7 +12,10 @@
     "format": "prettier 'src/**/*.{js,ts}' --write",
     "format:check": "prettier 'src/**/*.{js,ts}' --check",
     "lint": "eslint --quiet .",
-    "lint:verbose": "eslint ."
+    "lint:verbose": "eslint .",
+    "fix-imports": "node bin/add-extensions.js",
+    "clean": "rm -rf dist",
+    "build": "npm run fix-imports && npm run clean && tsc"
   },
   "repository": {
     "type": "git",
@@ -33,6 +36,7 @@
     "dotenv": "^16.4.5",
     "express": "~3.21.2",
     "fb": "~1.0.2",
+    "glob": "^11.0.0",
     "html-entities": "^2.5.2",
     "http-proxy": "~1.18.1",
     "lru-cache": "~3.0.0",
