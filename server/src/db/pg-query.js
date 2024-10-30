@@ -2,9 +2,9 @@ import { isFunction, isString, isUndefined } from 'underscore';
 import { Pool } from 'pg';
 import { parse as parsePgConnectionString } from 'pg-connection-string';
 import QueryStream from 'pg-query-stream';
-import Config from '../config';
-import logger from '../utils/logger';
-import { MPromise } from '../utils/metered';
+import Config from '../config.js';
+import logger from '../utils/logger.js';
+import { MPromise } from '../utils/metered.js';
 const usingReplica = Config.databaseURL !== Config.readOnlyDatabaseURL;
 const poolSize = Config.isDevMode ? 2 : usingReplica ? 3 : 12;
 const pgConnection = Object.assign(parsePgConnectionString(Config.databaseURL), {

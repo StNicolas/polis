@@ -1,8 +1,8 @@
 import crypto from 'crypto';
 import LruCache from 'lru-cache';
-import Config from './config';
-import pg from './db/pg-query';
-import logger from './utils/logger';
+import Config from './config.js';
+import pg from './db/pg-query.js';
+import logger from './utils/logger.js';
 function encrypt(text) {
   const algorithm = 'aes-256-ctr';
   const password = Config.encryptionPassword;

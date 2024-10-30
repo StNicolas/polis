@@ -1,7 +1,7 @@
 import LruCache from 'lru-cache';
-import pg from './db/pg-query';
-import { MPromise } from './utils/metered';
-import logger from './utils/logger';
+import pg from './db/pg-query.js';
+import { MPromise } from './utils/metered.js';
+import logger from './utils/logger.js';
 function createXidRecord(ownerUid, uid, xid, x_profile_image_url, x_name, x_email) {
   return pg.queryP(
     'insert into xids (owner, uid, xid, x_profile_image_url, x_name, x_email) values ($1, $2, $3, $4, $5, $6) ' +

@@ -2,11 +2,11 @@
 import {
   queryP_readOnly as pgQueryP_readOnly,
   stream_queryP_readOnly as stream_pgQueryP_readOnly
-} from '../db/pg-query';
-import { getZinvite, getZidForRid } from '../utils/zinvite';
-import { getPca } from '../utils/pca';
-import fail from '../utils/fail';
-import logger from '../utils/logger';
+} from '../db/pg-query.js';
+import { getZinvite, getZidForRid } from '../utils/zinvite.js';
+import { getPca } from '../utils/pca.js';
+import fail from '../utils/fail.js';
+import logger from '../utils/logger.js';
 const sep = '\n';
 const formatEscapedText = (s) => `"${s.replace(/"/g, '""')}"`;
 function formatCSVHeaders(colFns) {

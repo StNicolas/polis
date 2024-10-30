@@ -1,12 +1,12 @@
 import _ from 'underscore';
 import { isUri } from 'valid-url';
 import LruCache from 'lru-cache';
-import pg from '../db/pg-query';
-import fail from './fail';
-import logger from './logger';
-import Conversation from '../conversation';
-import User from '../user';
-import { MPromise } from './metered';
+import pg from '../db/pg-query.js';
+import fail from './fail.js';
+import logger from './logger.js';
+import Conversation from '../conversation.js';
+import User from '../user.js';
+import { MPromise } from './metered.js';
 function moveToBody(req, res, next) {
   if (req.query) {
     req.body = req.body || {};

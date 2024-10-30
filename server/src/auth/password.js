@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import _ from 'underscore';
-import pg from '../db/pg-query';
+import pg from '../db/pg-query.js';
 function generateHashedPassword(password, callback) {
   bcrypt.genSalt(12, function (errSalt, salt) {
     if (errSalt) {

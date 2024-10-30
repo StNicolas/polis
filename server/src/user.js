@@ -1,9 +1,9 @@
 import _ from 'underscore';
 import LruCache from 'lru-cache';
-import pg from './db/pg-query';
-import { MPromise } from './utils/metered';
-import Conversation from './conversation';
-import logger from './utils/logger';
+import pg from './db/pg-query.js';
+import { MPromise } from './utils/metered.js';
+import Conversation from './conversation.js';
+import logger from './utils/logger.js';
 function getUserInfoForUid(uid, callback) {
   pg.query_readOnly('SELECT email, hname from users where uid = $1', [uid], function (err, results) {
     if (err) {

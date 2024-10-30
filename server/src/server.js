@@ -19,9 +19,9 @@ import timeout from 'connect-timeout';
 import _ from 'underscore';
 import pg from 'pg';
 import { encode } from 'html-entities';
-import { METRICS_IN_RAM, addInRamMetric, MPromise } from './utils/metered';
-import CreateUser from './auth/create-user';
-import Password from './auth/password';
+import { METRICS_IN_RAM, addInRamMetric, MPromise } from './utils/metered.js';
+import CreateUser from './auth/create-user.js';
+import Password from './auth/password.js';
 import dbPgQuery, {
   query as pgQuery,
   query_readOnly as pgQuery_readOnly,
@@ -29,12 +29,12 @@ import dbPgQuery, {
   queryP_metered_readOnly as pgQueryP_metered_readOnly,
   queryP_readOnly as pgQueryP_readOnly,
   queryP_readOnly_wRetryIfEmpty as pgQueryP_readOnly_wRetryIfEmpty
-} from './db/pg-query';
-import Config from './config';
-import fail from './utils/fail';
-import { getPca, fetchAndCacheLatestPcaData } from './utils/pca';
-import { getZinvite, getZinvites, getZidForRid } from './utils/zinvite';
-import { handle_GET_reportExport } from './routes/export';
+} from './db/pg-query.js';
+import Config from './config.js';
+import fail from './utils/fail.js';
+import { getPca, fetchAndCacheLatestPcaData } from './utils/pca.js';
+import { getZinvite, getZinvites, getZidForRid } from './utils/zinvite.js';
+import { handle_GET_reportExport } from './routes/export.js';
 AWS.config.update({ region: Config.awsRegion });
 const devMode = Config.isDevMode;
 const s3Client = new AWS.S3({ apiVersion: '2006-03-01' });
@@ -43,20 +43,20 @@ const doSendVerification = CreateUser.doSendVerification;
 const generateAndRegisterZinvite = CreateUser.generateAndRegisterZinvite;
 const generateToken = Password.generateToken;
 const generateTokenP = Password.generateTokenP;
-import { checkPassword, generateHashedPassword } from './auth/password';
-import cookies from './utils/cookies';
+import { checkPassword, generateHashedPassword } from './auth/password.js';
+import cookies from './utils/cookies.js';
 const COOKIES = cookies.COOKIES;
 const COOKIES_TO_CLEAR = cookies.COOKIES_TO_CLEAR;
-import constants from './utils/constants';
+import constants from './utils/constants.js';
 const DEFAULTS = constants.DEFAULTS;
-import User from './user';
-import Conversation from './conversation';
-import Session from './session';
-import Comment from './comment';
-import Utils from './utils/common';
-import SQL from './db/sql';
-import logger from './utils/logger';
-import emailSenders from './email/senders';
+import User from './user.js';
+import Conversation from './conversation.js';
+import Session from './session.js';
+import Comment from './comment.js';
+import Utils from './utils/common.js';
+import SQL from './db/sql.js';
+import logger from './utils/logger.js';
+import emailSenders from './email/senders.js';
 const sendTextEmail = emailSenders.sendTextEmail;
 const sendTextEmailWithBackupOnly = emailSenders.sendTextEmailWithBackupOnly;
 const resolveWith = (x) => {

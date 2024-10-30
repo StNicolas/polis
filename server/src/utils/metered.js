@@ -1,4 +1,4 @@
-import logger from './logger';
+import logger from './logger.js';
 export const METRICS_IN_RAM = {};
 const SHOULD_ADD_METRICS_IN_RAM = false;
 export function addInRamMetric(metricName, val) {

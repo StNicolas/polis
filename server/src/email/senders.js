@@ -2,8 +2,8 @@ import fs from 'fs';
 import AWS from 'aws-sdk';
 import nodemailer from 'nodemailer';
 import mg from 'nodemailer-mailgun-transport';
-import Config from '../config';
-import logger from '../utils/logger';
+import Config from '../config.js';
+import logger from '../utils/logger.js';
 AWS.config.update({ region: Config.awsRegion });
 function sendTextEmailWithBackup(sender, recipient, subject, text) {
   const transportTypes = Config.emailTransportTypes ? Config.emailTransportTypes.split(',') : ['aws-ses', 'mailgun'];

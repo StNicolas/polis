@@ -2,10 +2,10 @@
 import zlib from 'zlib';
 import _ from 'underscore';
 import LruCache from 'lru-cache';
-import { queryP_readOnly as pgQueryP_readOnly } from '../db/pg-query';
-import Config from '../config';
-import logger from './logger';
-import { addInRamMetric } from './metered';
+import { queryP_readOnly as pgQueryP_readOnly } from '../db/pg-query.js';
+import Config from '../config.js';
+import logger from './logger.js';
+import { addInRamMetric } from './metered.js';
 let pcaCacheSize = Config.cacheMathResults ? 300 : 1;
 let pcaCache = new LruCache({
   max: pcaCacheSize

@@ -1,13 +1,13 @@
 import _ from 'underscore';
 import Translate from '@google-cloud/translate';
-import pg from './db/pg-query';
-import SQL from './db/sql';
-import { MPromise } from './utils/metered';
-import Utils from './utils/common';
-import logger from './utils/logger';
-import Config from './config';
-import Conversation from './conversation';
-import User from './user';
+import pg from './db/pg-query.js';
+import SQL from './db/sql.js';
+import { MPromise } from './utils/metered.js';
+import Utils from './utils/common.js';
+import logger from './utils/logger.js';
+import Config from './config.js';
+import Conversation from './conversation.js';
+import User from './user.js';
 const useTranslateApi = Config.shouldUseTranslationAPI;
 const translateClient = useTranslateApi ? Translate() : null;
 function getComment(zid, tid) {
