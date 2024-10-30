@@ -1,6 +1,4 @@
-'use strict';
-import * as dotenv from 'dotenv';
-dotenv.config();
+import './src/init.js';
 import Promise from 'bluebird';
 import express from 'express';
 import morgan from 'morgan';
