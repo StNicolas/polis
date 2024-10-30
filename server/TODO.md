@@ -11,7 +11,11 @@
 - [ ] Update fb
 - [ ] Update lru-cache
 - [ ] Update simple-oauth2
-- [ ] Probably remove some packages entirely
+- [ ] Update AWS-SDK to v3
+- [ ] Remove lodash
+- [ ] Remove underscore
+- [ ] Remove bluebird
+- [ ] Remove request
 
 ## Tests
 
@@ -43,8 +47,6 @@
 - [ ] replace all console statements with logger
 - [ ] Remove, Normalize, (or add) Comments
 - [ ] Update callback chains with async/await
-- [ ] Remove lodash
-- [ ] Remove underscore
 - [ ] Update and improve analytics
 - [ ] Update and improve logging
 - [ ] Normalize the error handling
