@@ -1,4 +1,3 @@
-'use strict';
 import zlib from 'zlib';
 import _ from 'underscore';
 import LruCache from 'lru-cache';

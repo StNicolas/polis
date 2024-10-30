@@ -1,4 +1,3 @@
-'use strict';
 import {
   queryP_readOnly as pgQueryP_readOnly,
   stream_queryP_readOnly as stream_pgQueryP_readOnly

@@ -1,4 +1,3 @@
-'use strict';
 import LruCache from 'lru-cache';
 import _ from 'underscore';
 import {
