@@ -1,5 +1,5 @@
 import './src/init.js';
-import Promise from 'bluebird';
+import bluebird from 'bluebird';
 import express from 'express';
 import morgan from 'morgan';
 import Config from './src/config.js';
@@ -37,12 +37,13 @@ import {
 const app = express();
 app.use(morgan('dev'));
 app.set('trust proxy', 'uniquelocal');
-var helpersInitialized = new Promise(function (resolve, reject) {
+
+const helpersInitialized = new bluebird.Promise(function (resolve, reject) {
   resolve(server.initializePolisHelpers());
 });
 
 helpersInitialized.then(
-  function (o) {
+  (o) => {
     const {
       addCorsHeader,
       auth,
@@ -540,7 +541,7 @@ helpersInitialized.then(
     );
     app.get('/api/v3/testConnection', moveToBody, handle_GET_testConnection);
     app.get('/api/v3/testDatabase', moveToBody, handle_GET_testDatabase);
-    app.get('/robots.txt', function (req, res) {
+    app.get('/robots.txt', (req, res) => {
       res.send('User-agent: *\n' + 'Disallow: /api/');
     });
     app.get(
@@ -1026,10 +1027,8 @@ helpersInitialized.then(
       handle_POST_metrics
     );
     function makeFetchIndexWithoutPreloadData() {
-      let port = staticFilesParticipationPort;
-      return function (req, res) {
-        return fetchIndexWithoutPreloadData(req, res, port);
-      };
+      const port = staticFilesParticipationPort;
+      return (req, res) => fetchIndexWithoutPreloadData(req, res, port);
     }
     app.get(/^\/football$/, makeRedirectorTo('/2arcefpshi'));
     app.get(/^\/pdf$/, makeRedirectorTo('/23mymwyhkn'));
@@ -1133,7 +1132,7 @@ helpersInitialized.then(
     app.get(/^\/cached\/.*/, proxy);
     app.get(/^\/font\/.*/, proxy);
     app.get(/^\/.*embed.*js\/.*/, proxy);
-    app.get(/.*\//, function (req, res) {
+    app.get(/.*\//, (req, res) => {
       let pathAndQuery = req.originalUrl;
       if (pathAndQuery.endsWith('/')) {
         pathAndQuery = pathAndQuery.slice(0, pathAndQuery.length - 1);
@@ -1141,7 +1140,7 @@ helpersInitialized.then(
       if (pathAndQuery.indexOf('?') >= 1) {
         pathAndQuery = pathAndQuery.replace('/?', '?');
       }
-      let fullUrl = req.protocol + '://' + req.get('host') + pathAndQuery;
+      const fullUrl = req.protocol + '://' + req.get('host') + pathAndQuery;
       if (pathAndQuery !== req.originalUrl) {
         res.redirect(fullUrl);
       } else {
@@ -1162,7 +1161,7 @@ helpersInitialized.then(
     app.listen(Config.serverPort);
     logger.info('started on port ' + Config.serverPort);
   },
-  function (err) {
+  (err) => {
     logger.error('failed to init server', err);
   }
 );
