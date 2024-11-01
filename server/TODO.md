@@ -6,7 +6,6 @@
 - [ ] Update akismet
 - [ ] Update async
 - [ ] Update boolean
-- [ ] Update eslint
 - [ ] Update express
 - [ ] Update fb
 - [ ] Update lru-cache
@@ -51,6 +50,8 @@
 - [ ] Update and improve logging
 - [ ] Normalize the error handling
 - [ ] Identify and refactor "hacks"
+- [ ] Swtich from eslint+prettier to biomejs
+- [ ] Fix all linting errors
 
 ## Express
 
