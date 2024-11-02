@@ -30,6 +30,8 @@
 
 - [ ] Create migrations for (re)building the whole database
 - [ ] Create a schema with TypeORM or similar
+- [ ] Upgrade to PostgreSQL 14
+- [ ] Upgrade to PostgreSQL 17
 
 ## Modular Code
 

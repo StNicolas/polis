@@ -1,4 +1,8 @@
-FROM docker.io/postgres:13.4-alpine
+# Example Usage:
+# docker build -t polis-db:local -f Dockerfile-db .
+# docker run --rm -p 5432:5432 -e POSTGRES_DB=polis-dev -e POSTGRES_PASSWORD=postgres polis-db:local
+
+FROM docker.io/postgres:14-alpine
 
 # Used when no existing database on postgres volume, including first initialization.
 # See: docs/deployment.md#database-migrations
