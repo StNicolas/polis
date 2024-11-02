@@ -15,6 +15,8 @@
 - [ ] Remove underscore
 - [ ] Remove bluebird
 - [ ] Remove request
+- [ ] Somehow remove "punycode" (aws-sdk, request-promise, request)
+- [ ] consider axios or native fetch over request/request-promise
 
 ## Tests
 

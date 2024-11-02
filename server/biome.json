@@ -6,13 +6,14 @@
   },
   "formatter": {
     "enabled": true,
-    "indentStyle": "space"
+    "indentStyle": "space",
+    "lineWidth": 120
   },
   "javascript": {
     "formatter": {
       "quoteStyle": "single",
-      "semicolons": "asNeeded",
-      "trailingCommas": "es5"
+      "semicolons": "always",
+      "trailingCommas": "none"
     }
   },
   "linter": {
@@ -24,7 +25,13 @@
         "noUnusedImports": "error",
         "noUnusedVariables": "error"
       },
-      "recommended": true
+      "recommended": true,
+      "style": {
+        "useNodejsImportProtocol": "off"
+      },
+      "suspicious": {
+        "noExplicitAny": "off"
+      }
     }
   },
   "organizeImports": {
