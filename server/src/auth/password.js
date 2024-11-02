@@ -78,7 +78,6 @@ function generateTokenP(len, pseudoRandomOk) {
     });
   });
 }
-export { generateHashedPassword, checkPassword, generateToken, generateTokenP };
 export default {
   generateHashedPassword,
   checkPassword,

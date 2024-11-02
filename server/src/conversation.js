@@ -85,14 +85,6 @@ function getZidFromConversationId(conversation_id) {
     });
   });
 }
-export {
-  createXidRecordByZid,
-  getXidRecord,
-  isXidWhitelisted,
-  getConversationInfo,
-  getConversationInfoByConversationId,
-  getZidFromConversationId
-};
 export default {
   createXidRecordByZid,
   createXidRecord,

@@ -1,7 +1,4 @@
-import {
-  queryP_readOnly as pgQueryP_readOnly,
-  stream_queryP_readOnly as stream_pgQueryP_readOnly
-} from '../db/pg-query.js';
+import pg from '../db/pg-query.js';
 import fail from '../utils/fail.js';
 import logger from '../utils/logger.js';
 import { getPca } from '../utils/pca.js';
@@ -33,8 +30,8 @@ function formatCSV(colFns, rows) {
 async function loadConversationSummary(zid, siteUrl) {
   const [zinvite, convoRows, commentersRow, pca] = await Promise.all([
     getZinvite(zid),
-    pgQueryP_readOnly('SELECT topic, description FROM conversations WHERE zid = $1', [zid]),
-    pgQueryP_readOnly('SELECT COUNT(DISTINCT pid) FROM comments WHERE zid = $1', [zid]),
+    pg.queryP_readOnly('SELECT topic, description FROM conversations WHERE zid = $1', [zid]),
+    pg.queryP_readOnly('SELECT COUNT(DISTINCT pid) FROM comments WHERE zid = $1', [zid]),
     getPca(zid)
   ]);
   if (!zinvite || !convoRows || !commentersRow || !pca) {
@@ -63,7 +60,7 @@ async function sendConversationSummary(zid, siteUrl, res) {
 async function sendCommentSummary(zid, res) {
   const comments = new Map();
   try {
-    const commentRows = await pgQueryP_readOnly(
+    const commentRows = await pg.queryP_readOnly(
       'SELECT tid, pid, created, txt, mod, velocity, active FROM comments WHERE zid = ($1)',
       [zid]
     );
@@ -73,7 +70,7 @@ async function sendCommentSummary(zid, res) {
       comment.pass = 0;
       comments.set(comment.tid, comment);
     }
-    stream_pgQueryP_readOnly(
+    pg.stream_queryP_readOnly(
       'SELECT tid, vote FROM votes WHERE zid = ($1) ORDER BY tid',
       [zid],
       (row) => {
@@ -126,7 +123,7 @@ async function sendVotesSummary(zid, res) {
   };
   res.setHeader('Content-Type', 'text/csv');
   res.write(formatCSVHeaders(formatters) + sep);
-  stream_pgQueryP_readOnly(
+  pg.stream_queryP_readOnly(
     'SELECT created as timestamp, tid, pid, vote FROM votes WHERE zid = $1 ORDER BY tid, pid',
     [zid],
     (row) => res.write(formatCSVRow(row, formatters) + sep),
@@ -138,7 +135,7 @@ async function sendVotesSummary(zid, res) {
   );
 }
 async function sendParticipantVotesSummary(zid, res) {
-  const commentRows = await pgQueryP_readOnly(
+  const commentRows = await pg.queryP_readOnly(
     'SELECT tid, pid FROM comments WHERE zid = ($1) ORDER BY tid ASC, created ASC',
     [zid]
   );
@@ -184,7 +181,7 @@ async function sendParticipantVotesSummary(zid, res) {
     ];
     res.write(values.map((value) => (value === undefined ? '' : String(value))).join(',') + sep);
   }
-  stream_pgQueryP_readOnly(
+  pg.stream_queryP_readOnly(
     'SELECT pid, tid, vote FROM votes WHERE zid = ($1) ORDER BY pid',
     [zid],
     (row) => {

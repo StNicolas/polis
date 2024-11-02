@@ -60,7 +60,6 @@ function sendTextEmail(sender, recipient, subject, text, transportTypes = Config
   });
   return promise;
 }
-export { sendTextEmail, sendTextEmailWithBackup as sendTextEmailWithBackupOnly };
 export default {
   sendTextEmail: sendTextEmail,
   sendTextEmailWithBackupOnly: sendTextEmailWithBackup

@@ -426,30 +426,3 @@ export {
   wantCookie,
   wantHeader
 };
-export default {
-  assignToP,
-  assignToPCustom,
-  getArrayOfInt,
-  getArrayOfStringNonEmpty,
-  getArrayOfStringNonEmptyLimitLength,
-  getBool,
-  getConversationIdFetchZid,
-  getEmail,
-  getInt,
-  getIntInRange,
-  getNumberInRange,
-  getOptionalStringLimitLength,
-  getPassword,
-  getPasswordWithCreatePasswordRules,
-  getReportIdFetchRid,
-  getStringLimitLength,
-  getUrlLimitLength,
-  moveToBody,
-  need,
-  needCookie,
-  needHeader,
-  resolve_pidThing,
-  want,
-  wantCookie,
-  wantHeader
-};

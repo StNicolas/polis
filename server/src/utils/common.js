@@ -37,5 +37,4 @@ const polisTypes = {
 };
 polisTypes.reactionValues = _.values(polisTypes.reactions);
 polisTypes.starValues = _.values(polisTypes.staractions);
-export { strToHex, hexToStr, polisTypes };
 export default { strToHex, hexToStr, polisTypes };

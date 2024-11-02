@@ -147,5 +147,4 @@ function generateAndRegisterZinvite(zid, generateShort) {
       .then((_rows) => zinvite)
   );
 }
-export { createUser, doSendVerification, generateAndRegisterZinvite };
 export default { createUser, doSendVerification, generateAndRegisterZinvite };

@@ -97,15 +97,6 @@ const sql_reports = sql.define({
     'label_group_9'
   ]
 });
-export {
-  sql_conversations,
-  sql_comments,
-  sql_votes_latest_unique,
-  sql_participant_metadata_answers,
-  sql_participants_extended,
-  sql_reports,
-  sql_users
-};
 export default {
   sql_conversations,
   sql_comments,

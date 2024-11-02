@@ -148,16 +148,6 @@ function stream_queryP_readOnly(queryString, params, onRow, onEnd, onError) {
     });
   });
 }
-export {
-  query,
-  query_readOnly,
-  queryP,
-  queryP_metered,
-  queryP_metered_readOnly,
-  queryP_readOnly,
-  queryP_readOnly_wRetryIfEmpty,
-  stream_queryP_readOnly
-};
 export default {
   query,
   query_readOnly,
