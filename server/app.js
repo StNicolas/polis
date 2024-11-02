@@ -5,6 +5,33 @@ import morgan from 'morgan';
 import Config from './src/config.js';
 import server from './src/server.js';
 import logger from './src/utils/logger.js';
+
+import {
+  assignToP,
+  assignToPCustom,
+  getArrayOfInt,
+  getArrayOfStringNonEmpty,
+  getArrayOfStringNonEmptyLimitLength,
+  getBool,
+  getConversationIdFetchZid,
+  getEmail,
+  getInt,
+  getIntInRange,
+  getNumberInRange,
+  getOptionalStringLimitLength,
+  getPassword,
+  getPasswordWithCreatePasswordRules,
+  getReportIdFetchRid,
+  getStringLimitLength,
+  getUrlLimitLength,
+  moveToBody,
+  need,
+  resolve_pidThing,
+  want,
+  wantCookie,
+  wantHeader
+} from './src/utils/parameter.js';
+
 const app = express();
 app.use(morgan('dev'));
 app.set('trust proxy', 'uniquelocal');
@@ -147,33 +174,6 @@ helpersInitialized.then(
       handle_PUT_reports,
       handle_PUT_users
     } = o;
-    const {
-      assignToP,
-      assignToPCustom,
-      getArrayOfInt,
-      getArrayOfStringNonEmpty,
-      getArrayOfStringNonEmptyLimitLength,
-      getBool,
-      getConversationIdFetchZid,
-      getEmail,
-      getInt,
-      getIntInRange,
-      getNumberInRange,
-      getOptionalStringLimitLength,
-      getPassword,
-      getPasswordWithCreatePasswordRules,
-      getReportIdFetchRid,
-      getStringLimitLength,
-      getUrlLimitLength,
-      moveToBody,
-      need,
-      needCookie,
-      needHeader,
-      resolve_pidThing,
-      want,
-      wantCookie,
-      wantHeader
-    } = require('./src/utils/parameter');
     app.disable('x-powered-by');
     app.use(middleware_responseTime_start);
     app.use(redirectIfNotHttps);
