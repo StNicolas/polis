@@ -7,7 +7,7 @@ import Utils from '../utils/common.js';
 import cookies from '../utils/cookies.js';
 import fail from '../utils/fail.js';
 import Password from './password.js';
-const COOKIES = cookies.COOKIES;
+const _COOKIES = cookies.COOKIES;
 const sendTextEmail = emailSenders.sendTextEmail;
 function createUser(req, res) {
   const hname = req.p.hname;
@@ -16,7 +16,7 @@ function createUser(req, res) {
   const email = req.p.email;
   const oinvite = req.p.oinvite;
   const zinvite = req.p.zinvite;
-  const organization = req.p.organization;
+  const _organization = req.p.organization;
   const gatekeeperTosPrivacy = req.p.gatekeeperTosPrivacy;
   let site_id = void 0;
   if (req.p.encodedParams) {
@@ -64,15 +64,7 @@ function createUser(req, res) {
           fail(res, 500, 'polis_err_generating_hash', err);
           return;
         }
-        const query =
-          'insert into users ' +
-          '(email, hname, zinvite, oinvite, is_owner' +
-          (site_id ? ', site_id' : '') +
-          ') VALUES ' +
-          '($1, $2, $3, $4, $5' +
-          (site_id ? ', $6' : '') +
-          ') ' +
-          'returning uid;';
+        const query = `insert into users (email, hname, zinvite, oinvite, is_owner${site_id ? ', site_id' : ''}) VALUES ($1, $2, $3, $4, $5${site_id ? ', $6' : ''}) returning uid;`;
         const vals = [email, hname, zinvite || null, oinvite || null, true];
         if (site_id) {
           vals.push(site_id);
@@ -82,8 +74,8 @@ function createUser(req, res) {
             fail(res, 500, 'polis_err_reg_failed_to_add_user_record', err);
             return;
           }
-          const uid = result && result.rows && result.rows[0] && result.rows[0].uid;
-          pg.query('insert into jianiuevyew (uid, pwhash) values ($1, $2);', [uid, hashedPassword], (err, results) => {
+          const uid = result?.rows?.[0]?.uid;
+          pg.query('insert into jianiuevyew (uid, pwhash) values ($1, $2);', [uid, hashedPassword], (err, _results) => {
             if (err) {
               fail(res, 500, 'polis_err_reg_failed_to_add_user_record', err);
               return;
@@ -119,7 +111,7 @@ function doSendVerification(req, email) {
   return Password.generateTokenP(30, false).then((einvite) =>
     pg
       .queryP('insert into einvites (email, einvite) values ($1, $2);', [email, einvite])
-      .then((rows) => sendVerificationEmail(req, email, einvite))
+      .then((_rows) => sendVerificationEmail(req, email, einvite))
   );
 }
 function sendVerificationEmail(req, email, einvite) {
@@ -152,7 +144,7 @@ function generateAndRegisterZinvite(zid, generateShort) {
   return Password.generateTokenP(len, false).then((zinvite) =>
     pg
       .queryP('INSERT INTO zinvites (zid, zinvite, created) VALUES ($1, $2, default);', [zid, zinvite])
-      .then((rows) => zinvite)
+      .then((_rows) => zinvite)
   );
 }
 export { createUser, doSendVerification, generateAndRegisterZinvite };

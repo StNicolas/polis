@@ -74,14 +74,14 @@ function getZidFromConversationId(conversation_id) {
     pg.query_readOnly('select zid from zinvites where zinvite = ($1);', [conversation_id], (err, results) => {
       if (err) {
         return reject(err);
-      } else if (!results || !results.rows || !results.rows.length) {
-        logger.error('polis_err_fetching_zid_for_conversation_id ' + conversation_id, err);
-        return reject('polis_err_fetching_zid_for_conversation_id');
-      } else {
-        const zid = results.rows[0].zid;
-        conversationIdToZidCache.set(conversation_id, zid);
-        return resolve(zid);
       }
+      if (!results || !results.rows || !results.rows.length) {
+        logger.error(`polis_err_fetching_zid_for_conversation_id ${conversation_id}`, err);
+        return reject('polis_err_fetching_zid_for_conversation_id');
+      }
+      const zid = results.rows[0].zid;
+      conversationIdToZidCache.set(conversation_id, zid);
+      return resolve(zid);
     });
   });
 }

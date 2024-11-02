@@ -15,7 +15,7 @@ export function getZinvite(zid, dontUseCache) {
     return Promise.resolve(cachedConversationId);
   }
   return pgQueryP_metered('getZinvite', 'select * from zinvites where zid = ($1);', [zid]).then((rows) => {
-    const conversation_id = (rows && rows[0] && rows[0].zinvite) || void 0;
+    const conversation_id = rows?.[0]?.zinvite || void 0;
     if (conversation_id) {
       zidToConversationIdCache.set(zid, conversation_id);
     }
@@ -49,7 +49,7 @@ export function getZinvites(zids) {
       resolve(makeZidToConversationIdMap([zidsWithCachedConversationIds]));
       return;
     }
-    pgQuery_readOnly('select * from zinvites where zid in (' + uncachedZids.join(',') + ');', [], (err, result) => {
+    pgQuery_readOnly(`select * from zinvites where zid in (${uncachedZids.join(',')});`, [], (err, result) => {
       if (err) {
         reject(err);
       } else {

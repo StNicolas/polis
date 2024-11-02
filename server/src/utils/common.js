@@ -1,10 +1,11 @@
 import _ from 'underscore';
 function strToHex(str) {
-  let hex, i;
+  let hex;
+  let i;
   let result = '';
   for (i = 0; i < str.length; i++) {
     hex = str.charCodeAt(i).toString(16);
-    result += ('000' + hex).slice(-4);
+    result += `000${hex}`.slice(-4);
   }
   return result;
 }

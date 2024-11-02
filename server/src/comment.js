@@ -12,7 +12,7 @@ const useTranslateApi = Config.shouldUseTranslationAPI;
 const translateClient = useTranslateApi ? Translate() : null;
 function getComment(zid, tid) {
   return pg.queryP('select * from comments where zid = ($1) and tid = ($2);', [zid, tid]).then((rows) => {
-    return (rows && rows[0]) || null;
+    return rows?.[0] || null;
   });
 }
 function getComments(o) {
@@ -82,7 +82,7 @@ function getComments(o) {
                 const temp = JSON.parse(info.fb_public_profile);
                 infoToReturn.fb_verified = temp.verified;
               } catch (err) {
-                logger.error('error parsing JSON of fb_public_profile for uid: ' + info.uid, err);
+                logger.error(`error parsing JSON of fb_public_profile for uid: ${info.uid}`, err);
               }
             }
             if (!_.isUndefined(infoToReturn.fb_user_id)) {
@@ -102,23 +102,22 @@ function getComments(o) {
             return c;
           });
         });
-      } else {
-        return comments;
       }
+      return comments;
     })
     .then((comments) => {
       comments.forEach((c) => {
-        delete c.uid;
-        delete c.anon;
+        c.uid = undefined;
+        c.anon = undefined;
       });
       return comments;
     });
 }
 function _getCommentsForModerationList(o) {
-  var strictCheck = Promise.resolve(null);
-  var include_voting_patterns = o.include_voting_patterns;
+  let strictCheck = Promise.resolve(null);
+  const include_voting_patterns = o.include_voting_patterns;
   if (o.modIn) {
-    strictCheck = pg.queryP('select strict_moderation from conversations where zid = ($1);', [o.zid]).then((c) => {
+    strictCheck = pg.queryP('select strict_moderation from conversations where zid = ($1);', [o.zid]).then((_c) => {
       return o.strict_moderation;
     });
   }
@@ -149,15 +148,14 @@ function _getCommentsForModerationList(o) {
     if (!include_voting_patterns) {
       return pg.queryP_metered_readOnly(
         '_getCommentsForModerationList',
-        'select * from comments where comments.zid = ($1)' + modClause,
+        `select * from comments where comments.zid = ($1)${modClause}`,
         params
       );
     }
     return pg
       .queryP_metered_readOnly(
         '_getCommentsForModerationList',
-        'select * from (select tid, vote, count(*) from votes_latest_unique where zid = ($1) group by tid, vote) as foo full outer join comments on foo.tid = comments.tid where comments.zid = ($1)' +
-          modClause,
+        `select * from (select tid, vote, count(*) from votes_latest_unique where zid = ($1) group by tid, vote) as foo full outer join comments on foo.tid = comments.tid where comments.zid = ($1)${modClause}`,
         params
       )
       .then((rows) => {
@@ -247,7 +245,7 @@ function _getCommentsList(o) {
           reject(err);
           return;
         }
-        if (docs.rows && docs.rows.length) {
+        if (docs.rows?.length) {
           resolve(docs.rows);
         } else {
           resolve([]);

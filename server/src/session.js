@@ -7,7 +7,7 @@ function encrypt(text) {
   const algorithm = 'aes-256-ctr';
   const password = Config.encryptionPassword;
   const cipher = crypto.createCipher(algorithm, password);
-  var crypted = cipher.update(text, 'utf8', 'hex');
+  let crypted = cipher.update(text, 'utf8', 'hex');
   crypted += cipher.final('hex');
   return crypted;
 }
@@ -15,7 +15,7 @@ function decrypt(text) {
   const algorithm = 'aes-256-ctr';
   const password = Config.encryptionPassword;
   const decipher = crypto.createDecipher(algorithm, password);
-  var dec = decipher.update(text, 'hex', 'utf8');
+  let dec = decipher.update(text, 'hex', 'utf8');
   dec += decipher.final('utf8');
   return dec;
 }
@@ -30,7 +30,7 @@ function makeSessionToken() {
 const userTokenCache = new LruCache({
   max: 9000
 });
-function getUserInfoForSessionToken(sessionToken, res, cb) {
+function getUserInfoForSessionToken(sessionToken, _res, cb) {
   const cachedUid = userTokenCache.get(sessionToken);
   if (cachedUid) {
     cb(null, cachedUid);
@@ -58,7 +58,7 @@ function startSession(uid, cb) {
   pg.query(
     'insert into auth_tokens (uid, token, created) values ($1, $2, default);',
     [uid, token],
-    (err, repliesSetToken) => {
+    (err, _repliesSetToken) => {
       if (err) {
         cb(err);
         return;
@@ -69,7 +69,7 @@ function startSession(uid, cb) {
   );
 }
 function endSession(sessionToken, cb) {
-  pg.query('delete from auth_tokens where token = ($1);', [sessionToken], (err, results) => {
+  pg.query('delete from auth_tokens where token = ($1);', [sessionToken], (err, _results) => {
     if (err) {
       cb(err);
       return;
@@ -89,7 +89,7 @@ function setupPwReset(uid, cb) {
   pg.query(
     'insert into pwreset_tokens (uid, token, created) values ($1, $2, default);',
     [uid, token],
-    (errSetToken, repliesSetToken) => {
+    (errSetToken, _repliesSetToken) => {
       if (errSetToken) {
         cb(errSetToken);
         return;
@@ -116,7 +116,7 @@ function getUidForPwResetToken(pwresettoken, cb) {
   });
 }
 function clearPwResetToken(pwresettoken, cb) {
-  pg.query('delete from pwreset_tokens where token = ($1);', [pwresettoken], (errDelToken, repliesSetToken) => {
+  pg.query('delete from pwreset_tokens where token = ($1);', [pwresettoken], (errDelToken, _repliesSetToken) => {
     if (errDelToken) {
       cb(errDelToken);
       return;

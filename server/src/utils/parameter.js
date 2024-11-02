@@ -7,7 +7,7 @@ import User from '../user.js';
 import fail from './fail.js';
 import logger from './logger.js';
 import { MPromise } from './metered.js';
-function moveToBody(req, res, next) {
+function moveToBody(req, _res, next) {
   if (req.query) {
     req.body = req.body || {};
     Object.assign(req.body, req.query);
@@ -135,7 +135,7 @@ function buildCallback(config) {
       }
       next();
     } else {
-      const s = 'polis_err_param_missing_' + name;
+      const s = `polis_err_param_missing_${name}`;
       logger.error(s);
       res.status(400);
       next(s);
@@ -206,9 +206,8 @@ function getUrlLimitLength(limit) {
         new Promise((resolve, reject) => {
           if (isUri(s)) {
             return resolve(s);
-          } else {
-            return reject('polis_fail_parse_url_invalid');
           }
+          return reject('polis_fail_parse_url_invalid');
         })
     );
   };
@@ -219,8 +218,8 @@ function getInt(s) {
       return resolve(s);
     }
     const x = Number.parseInt(s);
-    if (isNaN(x)) {
-      return reject('polis_fail_parse_int ' + s);
+    if (Number.isNaN(x)) {
+      return reject(`polis_fail_parse_int ${s}`);
     }
     resolve(x);
   });
@@ -240,7 +239,8 @@ function getBool(s) {
     s = s.toLowerCase();
     if (s === 't' || s === 'true' || s === 'on' || s === '1') {
       return resolve(true);
-    } else if (s === 'f' || s === 'false' || s === 'off' || s === '0') {
+    }
+    if (s === 'f' || s === 'false' || s === 'off' || s === '0') {
       return resolve(false);
     }
     reject('polis_fail_parse_boolean');
@@ -267,16 +267,16 @@ function getRidFromReportId(report_id) {
       return;
     }
     pg.query_readOnly('select rid from reports where report_id = ($1);', [report_id], (err, results) => {
-      logger.error('polis_err_fetching_rid_for_report_id ' + report_id, err);
+      logger.error(`polis_err_fetching_rid_for_report_id ${report_id}`, err);
       if (err) {
         return reject(err);
-      } else if (!results || !results.rows || !results.rows.length) {
-        return reject('polis_err_fetching_rid_for_report_id');
-      } else {
-        const rid = results.rows[0].rid;
-        reportIdToRidCache.set(report_id, rid);
-        return resolve(rid);
       }
+      if (!results || !results.rows || !results.rows.length) {
+        return reject('polis_err_fetching_rid_for_report_id');
+      }
+      const rid = results.rows[0].rid;
+      reportIdToRidCache.set(report_id, rid);
+      return resolve(rid);
     });
   });
 }
@@ -296,7 +296,7 @@ function getNumber(s) {
       return resolve(s);
     }
     const x = Number.parseFloat(s);
-    if (isNaN(x)) {
+    if (Number.isNaN(x)) {
       return reject('polis_fail_parse_number');
     }
     resolve(x);
@@ -311,7 +311,7 @@ function getNumberInRange(min, max) {
       return x;
     });
 }
-function getArrayOfString(a, maxStrings, maxLength) {
+function getArrayOfString(a, _maxStrings, _maxLength) {
   return new Promise((resolve, reject) => {
     let result;
     if (_.isString(a)) {
@@ -323,7 +323,7 @@ function getArrayOfString(a, maxStrings, maxLength) {
     resolve(result);
   });
 }
-function getArrayOfStringNonEmpty(a, maxStrings, maxLength) {
+function getArrayOfStringNonEmpty(a, _maxStrings, _maxLength) {
   if (!a || !a.length) {
     return Promise.reject('polis_fail_parse_string_array_empty');
   }
@@ -350,12 +350,12 @@ function getArrayOfInt(a) {
 function assignToP(req, name, x) {
   req.p = req.p || {};
   if (!_.isUndefined(req.p[name])) {
-    logger.error('polis_err_clobbering ' + name);
+    logger.error(`polis_err_clobbering ${name}`);
   }
   req.p[name] = x;
 }
 function assignToPCustom(name) {
-  return (req, ignoredName, x) => {
+  return (req, _ignoredName, x) => {
     assignToP(req, name, x);
   };
 }
@@ -363,7 +363,7 @@ function resolve_pidThing(pidThingStringName, assigner, loggingString) {
   if (_.isUndefined(loggingString)) {
     loggingString = '';
   }
-  logger.debug('resolve_pidThing ' + loggingString);
+  logger.debug(`resolve_pidThing ${loggingString}`);
   return (req, res, next) => {
     if (!req.p) {
       fail(res, 500, 'polis_err_this_middleware_should_be_after_auth_and_zid');

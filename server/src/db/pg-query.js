@@ -17,7 +17,7 @@ const pgConnection = Object.assign(parsePgConnectionString(Config.databaseURL), 
     : undefined,
   poolLog: (str, level) => {
     if (pgPoolLevelRanks.indexOf(level) <= pgPoolLoggingLevel) {
-      logger.info('pool.primary.' + level + ' ' + str);
+      logger.info(`pool.primary.${level} ${str}`);
     }
   }
 });
@@ -31,7 +31,7 @@ const readsPgConnection = Object.assign(parsePgConnectionString(Config.readOnlyD
     : undefined,
   poolLog: (str, level) => {
     if (pgPoolLevelRanks.indexOf(level) <= pgPoolLoggingLevel) {
-      logger.info('pool.readonly.' + level + ' ' + str);
+      logger.info(`pool.readonly.${level} ${str}`);
     }
   }
 });
@@ -62,11 +62,10 @@ function queryImpl(pool, queryString, ...args) {
           release(err);
           if (callback) callback(err);
           return reject(err);
-        } else {
-          release();
-          if (callback) callback(null, results);
-          resolve(results.rows);
         }
+        release();
+        if (callback) callback(null, results);
+        resolve(results.rows);
       });
     });
   });

@@ -41,9 +41,8 @@ export default {
   getServerUrl: () => {
     if (devMode) {
       return `http://${devHostname}`;
-    } else {
-      return `https://${prodHostname}`;
     }
+    return `https://${prodHostname}`;
   },
   adminEmailDataExport: process.env.ADMIN_EMAIL_DATA_EXPORT,
   adminEmailDataExportTest: process.env.ADMIN_EMAIL_DATA_EXPORT_TEST,

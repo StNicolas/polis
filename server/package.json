@@ -13,8 +13,9 @@
     "clean": "rm -rf dist",
     "build": "npm run fix-imports && npm run clean && tsc",
     "lint": "biome lint --write",
+    "lint:unsafe": "biome lint --write --unsafe",
     "format": "biome format --write",
-    "check": "biome check"
+    "check": "biome check --max-diagnostics=none"
   },
   "repository": {
     "type": "git",

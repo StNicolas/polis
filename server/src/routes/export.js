@@ -33,8 +33,8 @@ function formatCSV(colFns, rows) {
 async function loadConversationSummary(zid, siteUrl) {
   const [zinvite, convoRows, commentersRow, pca] = await Promise.all([
     getZinvite(zid),
-    pgQueryP_readOnly(`SELECT topic, description FROM conversations WHERE zid = $1`, [zid]),
-    pgQueryP_readOnly(`SELECT COUNT(DISTINCT pid) FROM comments WHERE zid = $1`, [zid]),
+    pgQueryP_readOnly('SELECT topic, description FROM conversations WHERE zid = $1', [zid]),
+    pgQueryP_readOnly('SELECT COUNT(DISTINCT pid) FROM comments WHERE zid = $1', [zid]),
     getPca(zid)
   ]);
   if (!zinvite || !convoRows || !commentersRow || !pca) {
@@ -189,8 +189,8 @@ async function sendParticipantVotesSummary(zid, res) {
     [zid],
     (row) => {
       const pid = row.pid;
-      if (pid != currentParticipantId) {
-        if (currentParticipantId != -1) {
+      if (pid !== currentParticipantId) {
+        if (currentParticipantId !== -1) {
           sendCurrentParticipantRow();
         }
         currentParticipantId = pid;
@@ -199,7 +199,7 @@ async function sendParticipantVotesSummary(zid, res) {
       currentParticipantVotes.set(row.tid, -row.vote);
     },
     () => {
-      if (currentParticipantId != -1) {
+      if (currentParticipantId !== -1) {
         sendCurrentParticipantRow();
       }
       res.end();
@@ -219,10 +219,11 @@ export async function handle_GET_reportExport(req, res) {
       return;
     }
     switch (report_type) {
-      case 'summary.csv':
+      case 'summary.csv': {
         const siteUrl = `${req.headers['x-forwarded-proto']}://${req.headers.host}`;
         await sendConversationSummary(zid, siteUrl, res);
         break;
+      }
       case 'comments.csv':
         await sendCommentSummary(zid, res);
         break;

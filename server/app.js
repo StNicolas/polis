@@ -546,7 +546,7 @@ helpersInitialized.then(
     );
     app.get('/api/v3/testConnection', moveToBody, handle_GET_testConnection);
     app.get('/api/v3/testDatabase', moveToBody, handle_GET_testDatabase);
-    app.get('/robots.txt', (req, res) => {
+    app.get('/robots.txt', (_req, res) => {
       res.send('User-agent: *\n' + 'Disallow: /api/');
     });
     app.get(
@@ -1145,14 +1145,14 @@ helpersInitialized.then(
       if (pathAndQuery.indexOf('?') >= 1) {
         pathAndQuery = pathAndQuery.replace('/?', '?');
       }
-      const fullUrl = req.protocol + '://' + req.get('host') + pathAndQuery;
+      const fullUrl = `${req.protocol}://${req.get('host')}${pathAndQuery}`;
       if (pathAndQuery !== req.originalUrl) {
         res.redirect(fullUrl);
       } else {
         proxy(req, res);
       }
     });
-    var missingFilesGet404 = false;
+    const missingFilesGet404 = false;
     if (missingFilesGet404) {
       app.get(
         /^\/[^(api\/)]?.*/,
@@ -1164,7 +1164,7 @@ helpersInitialized.then(
       app.get(/^\/[^(api\/)]?.*/, proxy);
     }
     app.listen(Config.serverPort);
-    logger.info('started on port ' + Config.serverPort);
+    logger.info(`started on port ${Config.serverPort}`);
   },
   (err) => {
     logger.error('failed to init server', err);

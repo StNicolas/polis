@@ -44,34 +44,33 @@ async function getUser(uid, zid_optional, xid_optional, owner_uid_optional) {
   const fbInfo = o[1];
   const twInfo = o[2];
   const xInfo = o[3];
-  const hasFacebook = fbInfo && fbInfo.length && fbInfo[0];
-  const hasTwitter = twInfo && twInfo.length && twInfo[0];
-  const hasXid = xInfo && xInfo.length && xInfo[0];
+  const hasFacebook = fbInfo?.length && fbInfo[0];
+  const hasTwitter = twInfo?.length && twInfo[0];
+  const hasXid = xInfo?.length && xInfo[0];
   if (hasFacebook) {
     const width = 40;
     const height = 40;
-    fbInfo.fb_picture =
-      'https://graph.facebook.com/v2.2/' + fbInfo.fb_user_id + '/picture?width=' + width + '&height=' + height;
-    delete fbInfo[0].response;
+    fbInfo.fb_picture = `https://graph.facebook.com/v2.2/${fbInfo.fb_user_id}/picture?width=${width}&height=${height}`;
+    fbInfo[0].response = undefined;
   }
   if (hasTwitter) {
-    delete twInfo[0].response;
+    twInfo[0].response = undefined;
   }
   if (hasXid) {
-    delete xInfo[0].owner;
-    delete xInfo[0].created;
-    delete xInfo[0].uid;
+    xInfo[0].owner = undefined;
+    xInfo[0].created = undefined;
+    xInfo[0].uid = undefined;
   }
   return {
     uid: uid,
     email: info.email,
     hname: info.hname,
     hasFacebook: !!hasFacebook,
-    facebook: fbInfo && fbInfo[0],
-    twitter: twInfo && twInfo[0],
+    facebook: fbInfo?.[0],
+    twitter: twInfo?.[0],
     hasTwitter: !!hasTwitter,
     hasXid: !!hasXid,
-    xInfo: xInfo && xInfo[0],
+    xInfo: xInfo?.[0],
     finishedTutorial: !!info.tut,
     site_ids: [info.site_id],
     created: Number(info.created)
@@ -99,7 +98,7 @@ const pidCache = new LruCache({
   max: 9000
 });
 function getPid(zid, uid, callback) {
-  const cacheKey = zid + '_' + uid;
+  const cacheKey = `${zid}_${uid}`;
   const cachedPid = pidCache.get(cacheKey);
   if (!_.isUndefined(cachedPid)) {
     callback(null, cachedPid);
@@ -107,7 +106,7 @@ function getPid(zid, uid, callback) {
   }
   pg.query_readOnly('SELECT pid FROM participants WHERE zid = ($1) AND uid = ($2);', [zid, uid], (err, docs) => {
     let pid = -1;
-    if (docs && docs.rows && docs.rows[0]) {
+    if (docs?.rows?.[0]) {
       pid = docs.rows[0].pid;
       pidCache.set(cacheKey, pid);
     }
@@ -115,7 +114,7 @@ function getPid(zid, uid, callback) {
   });
 }
 function getPidPromise(zid, uid, usePrimary) {
-  const cacheKey = zid + '_' + uid;
+  const cacheKey = `${zid}_${uid}`;
   const cachedPid = pidCache.get(cacheKey);
   return new MPromise('getPidPromise', (resolve, reject) => {
     if (!_.isUndefined(cachedPid)) {
@@ -137,8 +136,8 @@ function getPidPromise(zid, uid, usePrimary) {
     });
   });
 }
-function getPidForParticipant(assigner, cache) {
-  return (req, res, next) => {
+function getPidForParticipant(assigner, _cache) {
+  return (req, _res, next) => {
     const zid = req.p.zid;
     const uid = req.p.uid;
     function finish(pid) {
@@ -169,7 +168,7 @@ function getSocialInfoForUsers(uids, zid) {
   uids = _.uniq(uids);
   uids.forEach((uid) => {
     if (!_.isNumber(uid)) {
-      throw 'polis_err_123123_invalid_uid got:' + uid;
+      throw `polis_err_123123_invalid_uid got:${uid}`;
     }
   });
   if (!uids.length) {
@@ -178,18 +177,7 @@ function getSocialInfoForUsers(uids, zid) {
   const uidString = uids.join(',');
   return pg.queryP_metered_readOnly(
     'getSocialInfoForUsers',
-    'with ' +
-      'x as (select * from xids where uid in (' +
-      uidString +
-      ') and owner  in (select org_id from conversations where zid = ($1))), ' +
-      'fb as (select * from facebook_users where uid in (' +
-      uidString +
-      ')), ' +
-      'tw as (select * from twitter_users where uid in (' +
-      uidString +
-      ')), ' +
-      'foo as (select *, coalesce(fb.uid, tw.uid) as foouid from fb full outer join tw on tw.uid = fb.uid) ' +
-      'select *, coalesce(foo.foouid, x.uid) as uid from foo full outer join x on x.uid = foo.foouid;',
+    `with x as (select * from xids where uid in (${uidString}) and owner  in (select org_id from conversations where zid = ($1))), fb as (select * from facebook_users where uid in (${uidString})), tw as (select * from twitter_users where uid in (${uidString})), foo as (select *, coalesce(fb.uid, tw.uid) as foouid from fb full outer join tw on tw.uid = fb.uid) select *, coalesce(foo.foouid, x.uid) as uid from foo full outer join x on x.uid = foo.foouid;`,
     [zid]
   );
 }
@@ -200,7 +188,7 @@ function getXidRecordByXidOwnerId(xid, owner, zid_optional, x_profile_image_url,
       if (!createIfMissing) {
         return null;
       }
-      var shouldCreateXidEntryPromise = !zid_optional
+      const shouldCreateXidEntryPromise = !zid_optional
         ? Promise.resolve(true)
         : Conversation.getConversationInfo(zid_optional).then((conv) => {
             return conv.use_xid_whitelist ? Conversation.isXidWhitelisted(owner, xid) : Promise.resolve(true);

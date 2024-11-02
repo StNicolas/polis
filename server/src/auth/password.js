@@ -19,7 +19,8 @@ function checkPassword(uid, password) {
   return pg.queryP_readOnly_wRetryIfEmpty('select pwhash from jianiuevyew where uid = ($1);', [uid]).then((rows) => {
     if (!rows || !rows.length) {
       return null;
-    } else if (!rows[0].pwhash) {
+    }
+    if (!rows[0].pwhash) {
       return void 0;
     }
     const hashedPassword = rows[0].pwhash;

@@ -98,9 +98,8 @@ function getPermanentCookieAndEnsureItIsSet(req, res) {
     const token = Session.makeSessionToken();
     setPermanentCookie(req, res, token);
     return token;
-  } else {
-    return req.cookies[COOKIES.PERMANENT_COOKIE];
   }
+  return req.cookies[COOKIES.PERMANENT_COOKIE];
 }
 export default {
   COOKIES,

@@ -43,7 +43,7 @@ export function fetchAndCacheLatestPcaData() {
         processMathObject(item);
         return updatePcaCache(item.zid, item);
       });
-      Promise.all(results).then((a) => {
+      Promise.all(results).then((_a) => {
         setTimeout(fetchAndCacheLatestPcaData, waitTime());
       });
     })
@@ -57,7 +57,7 @@ export function getPca(zid, math_tick) {
   if (cached && cached.expiration < Date.now()) {
     cached = undefined;
   }
-  const cachedPOJO = cached && cached.asPOJO;
+  const cachedPOJO = cached?.asPOJO;
   if (cachedPOJO) {
     if (cachedPOJO.math_tick <= (math_tick || 0)) {
       logger.info('math was cached but not new', {
@@ -66,10 +66,9 @@ export function getPca(zid, math_tick) {
         query_math_tick: math_tick
       });
       return Promise.resolve(undefined);
-    } else {
-      logger.info('math from cache', { zid, math_tick });
-      return Promise.resolve(cached);
     }
+    logger.info('math from cache', { zid, math_tick });
+    return Promise.resolve(cached);
   }
   logger.info('mathpoll cache miss', { zid, math_tick });
   const queryStart = Date.now();
@@ -108,7 +107,7 @@ export function getPca(zid, math_tick) {
 }
 function updatePcaCache(zid, item) {
   return new Promise((resolve, reject) => {
-    delete item.zid;
+    item.zid = undefined;
     const asJSON = JSON.stringify(item);
     const buf = Buffer.from(asJSON, 'utf-8');
     zlib.gzip(buf, (err, jsondGzipdPcaBuffer) => {
@@ -144,9 +143,9 @@ function processMathObject(o) {
       return { id: Number(g.id), val: g };
     });
   }
-  if (!_.isArray(o['repness'])) {
-    o['repness'] = _.keys(o['repness']).map((gid) => {
-      return { id: Number(gid), val: o['repness'][gid] };
+  if (!_.isArray(o.repness)) {
+    o.repness = _.keys(o.repness).map((gid) => {
+      return { id: Number(gid), val: o.repness[gid] };
     });
   }
   if (!_.isArray(o['group-votes'])) {
@@ -194,11 +193,11 @@ function processMathObject(o) {
       return g;
     });
   }
-  o['repness'] = toObj(o['repness']);
+  o.repness = toObj(o.repness);
   o['group-votes'] = toObj(o['group-votes']);
   o['group-clusters'] = toArray(o['group-clusters']);
-  delete o['subgroup-repness'];
-  delete o['subgroup-votes'];
-  delete o['subgroup-clusters'];
+  o['subgroup-repness'] = undefined;
+  o['subgroup-votes'] = undefined;
+  o['subgroup-clusters'] = undefined;
   return o;
 }

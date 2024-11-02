@@ -51,7 +51,7 @@ function sendTextEmail(sender, recipient, subject, text, transportTypes = Config
   const mailOptions = getMailOptions(thisTransportType);
   const transporter = nodemailer.createTransport(mailOptions);
   const promise = transporter.sendMail({ from: sender, to: recipient, subject: subject, text: text }).catch((err) => {
-    logger.error('polis_err_email_sender_failed_transport_priority_' + priority.toString(), err);
+    logger.error(`polis_err_email_sender_failed_transport_priority_${priority.toString()}`, err);
     logger.error(
       `Unable to send email via priority ${priority.toString()} transport '${thisTransportType}' to: ${recipient}`,
       err
