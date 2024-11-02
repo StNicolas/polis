@@ -5,43 +5,12 @@ import morgan from 'morgan';
 import Config from './src/config.js';
 import server from './src/server.js';
 import logger from './src/utils/logger.js';
-
-import {
-  assignToP,
-  assignToPCustom,
-  getArrayOfInt,
-  getArrayOfStringNonEmpty,
-  getArrayOfStringNonEmptyLimitLength,
-  getBool,
-  getConversationIdFetchZid,
-  getEmail,
-  getInt,
-  getIntInRange,
-  getNumberInRange,
-  getOptionalStringLimitLength,
-  getPassword,
-  getPasswordWithCreatePasswordRules,
-  getReportIdFetchRid,
-  getStringLimitLength,
-  getUrlLimitLength,
-  moveToBody,
-  need,
-  needCookie,
-  needHeader,
-  resolve_pidThing,
-  want,
-  wantCookie,
-  wantHeader
-} from './src/utils/parameter.js';
-
 const app = express();
 app.use(morgan('dev'));
 app.set('trust proxy', 'uniquelocal');
-
-const helpersInitialized = new bluebird.Promise(function (resolve, reject) {
+const helpersInitialized = new bluebird.Promise((resolve, _reject) => {
   resolve(server.initializePolisHelpers());
 });
-
 helpersInitialized.then(
   (o) => {
     const {
@@ -92,6 +61,7 @@ helpersInitialized.then(
       handle_GET_math_correlationMatrix,
       handle_GET_dataExport,
       handle_GET_dataExport_results,
+      handle_GET_reportExport,
       handle_GET_domainWhitelist,
       handle_GET_dummyButton,
       handle_GET_einvites,
@@ -177,6 +147,33 @@ helpersInitialized.then(
       handle_PUT_reports,
       handle_PUT_users
     } = o;
+    const {
+      assignToP,
+      assignToPCustom,
+      getArrayOfInt,
+      getArrayOfStringNonEmpty,
+      getArrayOfStringNonEmptyLimitLength,
+      getBool,
+      getConversationIdFetchZid,
+      getEmail,
+      getInt,
+      getIntInRange,
+      getNumberInRange,
+      getOptionalStringLimitLength,
+      getPassword,
+      getPasswordWithCreatePasswordRules,
+      getReportIdFetchRid,
+      getStringLimitLength,
+      getUrlLimitLength,
+      moveToBody,
+      need,
+      needCookie,
+      needHeader,
+      resolve_pidThing,
+      want,
+      wantCookie,
+      wantHeader
+    } = require('./src/utils/parameter');
     app.disable('x-powered-by');
     app.use(middleware_responseTime_start);
     app.use(redirectIfNotHttps);
@@ -219,6 +216,14 @@ helpersInitialized.then(
       want('format', getStringLimitLength(1, 100), assignToP),
       want('unixTimestamp', getStringLimitLength(99), assignToP),
       handle_GET_dataExport
+    );
+    app.get(
+      '/api/v3/reportExport/:report_id/:report_type',
+      moveToBody,
+      need('report_id', getReportIdFetchRid, assignToPCustom('rid')),
+      need('report_id', getStringLimitLength(1, 1000), assignToP),
+      need('report_type', getStringLimitLength(1, 1000), assignToP),
+      handle_GET_reportExport
     );
     app.get(
       '/api/v3/dataExport/results',

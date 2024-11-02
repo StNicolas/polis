@@ -1,5 +1,5 @@
-import { glob } from 'glob';
 import fs from 'fs/promises';
+import { glob } from 'glob';
 
 async function addExtensions() {
   const files = await glob('src-ts/**/*.ts');

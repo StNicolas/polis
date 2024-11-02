@@ -1,13 +1,13 @@
-import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import _ from 'underscore';
 import pg from '../db/pg-query.js';
 function generateHashedPassword(password, callback) {
-  bcrypt.genSalt(12, function (errSalt, salt) {
+  bcrypt.genSalt(12, (errSalt, salt) => {
     if (errSalt) {
       return callback('polis_err_salt');
     }
-    bcrypt.hash(password, salt, function (errHash, hashedPassword) {
+    bcrypt.hash(password, salt, (errHash, hashedPassword) => {
       if (errHash) {
         return callback('polis_err_hash');
       }
@@ -16,25 +16,23 @@ function generateHashedPassword(password, callback) {
   });
 }
 function checkPassword(uid, password) {
-  return pg
-    .queryP_readOnly_wRetryIfEmpty('select pwhash from jianiuevyew where uid = ($1);', [uid])
-    .then(function (rows) {
-      if (!rows || !rows.length) {
-        return null;
-      } else if (!rows[0].pwhash) {
-        return void 0;
-      }
-      let hashedPassword = rows[0].pwhash;
-      return new Promise(function (resolve, reject) {
-        bcrypt.compare(password, hashedPassword, function (errCompare, result) {
-          if (errCompare) {
-            reject(errCompare);
-          } else {
-            resolve(result ? 'ok' : 0);
-          }
-        });
+  return pg.queryP_readOnly_wRetryIfEmpty('select pwhash from jianiuevyew where uid = ($1);', [uid]).then((rows) => {
+    if (!rows || !rows.length) {
+      return null;
+    } else if (!rows[0].pwhash) {
+      return void 0;
+    }
+    const hashedPassword = rows[0].pwhash;
+    return new Promise((resolve, reject) => {
+      bcrypt.compare(password, hashedPassword, (errCompare, result) => {
+        if (errCompare) {
+          reject(errCompare);
+        } else {
+          resolve(result ? 'ok' : 0);
+        }
       });
     });
+  });
 }
 function generateToken(len, pseudoRandomOk, callback) {
   let gen;
@@ -43,7 +41,7 @@ function generateToken(len, pseudoRandomOk, callback) {
   } else {
     gen = crypto.randomBytes;
   }
-  gen(len, function (err, buf) {
+  gen(len, (err, buf) => {
     if (err) {
       return callback(err);
     }
@@ -69,8 +67,8 @@ function generateToken(len, pseudoRandomOk, callback) {
   });
 }
 function generateTokenP(len, pseudoRandomOk) {
-  return new Promise(function (resolve, reject) {
-    generateToken(len, pseudoRandomOk, function (err, token) {
+  return new Promise((resolve, reject) => {
+    generateToken(len, pseudoRandomOk, (err, token) => {
       if (err) {
         reject(err);
       } else {

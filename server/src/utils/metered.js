@@ -11,36 +11,36 @@ export function addInRamMetric(metricName, val) {
       index: 0
     };
   }
-  let index = METRICS_IN_RAM[metricName].index;
+  const index = METRICS_IN_RAM[metricName].index;
   METRICS_IN_RAM[metricName].values[index] = val;
   METRICS_IN_RAM[metricName].index = (index + 1) % 1000;
 }
 export function MPromise(name, f) {
-  let p = new Promise(f);
-  let start = Date.now();
-  setTimeout(function () {
+  const p = new Promise(f);
+  const start = Date.now();
+  setTimeout(() => {
     addInRamMetric(name + '.go', 1, start);
   }, 100);
   p.then(
-    function () {
-      let end = Date.now();
-      let duration = end - start;
-      setTimeout(function () {
+    () => {
+      const end = Date.now();
+      const duration = end - start;
+      setTimeout(() => {
         addInRamMetric(name + '.ok', duration, end);
       }, 100);
     },
-    function () {
-      let end = Date.now();
-      let duration = end - start;
-      setTimeout(function () {
+    () => {
+      const end = Date.now();
+      const duration = end - start;
+      setTimeout(() => {
         addInRamMetric(name + '.fail', duration, end);
       }, 100);
     }
-  ).catch(function (err) {
+  ).catch((err) => {
     logger.error('MPromise internal error', err);
-    let end = Date.now();
-    let duration = end - start;
-    setTimeout(function () {
+    const end = Date.now();
+    const duration = end - start;
+    setTimeout(() => {
       addInRamMetric(name + '.fail', duration, end);
       logger.error('MPromise internal error', err);
     }, 100);

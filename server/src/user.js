@@ -1,11 +1,11 @@
-import _ from 'underscore';
 import LruCache from 'lru-cache';
-import pg from './db/pg-query.js';
-import { MPromise } from './utils/metered.js';
+import _ from 'underscore';
 import Conversation from './conversation.js';
+import pg from './db/pg-query.js';
 import logger from './utils/logger.js';
+import { MPromise } from './utils/metered.js';
 function getUserInfoForUid(uid, callback) {
-  pg.query_readOnly('SELECT email, hname from users where uid = $1', [uid], function (err, results) {
+  pg.query_readOnly('SELECT email, hname from users where uid = $1', [uid], (err, results) => {
     if (err) {
       return callback(err);
     }
@@ -16,15 +16,15 @@ function getUserInfoForUid(uid, callback) {
   });
 }
 function getUserInfoForUid2(uid) {
-  return new MPromise('getUserInfoForUid2', function (resolve, reject) {
-    pg.query_readOnly('SELECT * from users where uid = $1', [uid], function (err, results) {
+  return new MPromise('getUserInfoForUid2', (resolve, reject) => {
+    pg.query_readOnly('SELECT * from users where uid = $1', [uid], (err, results) => {
       if (err) {
         return reject(err);
       }
       if (!results.rows || !results.rows.length) {
         return reject(null);
       }
-      let o = results.rows[0];
+      const o = results.rows[0];
       resolve(o);
     });
   });
@@ -40,16 +40,16 @@ async function getUser(uid, zid_optional, xid_optional, owner_uid_optional) {
     xidInfoPromise = Conversation.getXidRecordByXidOwnerId(xid_optional, owner_uid_optional, zid_optional);
   }
   const o = await Promise.all([getUserInfoForUid2(uid), getFacebookInfo([uid]), getTwitterInfo([uid]), xidInfoPromise]);
-  let info = o[0];
-  let fbInfo = o[1];
-  let twInfo = o[2];
-  let xInfo = o[3];
-  let hasFacebook = fbInfo && fbInfo.length && fbInfo[0];
-  let hasTwitter = twInfo && twInfo.length && twInfo[0];
-  let hasXid = xInfo && xInfo.length && xInfo[0];
+  const info = o[0];
+  const fbInfo = o[1];
+  const twInfo = o[2];
+  const xInfo = o[3];
+  const hasFacebook = fbInfo && fbInfo.length && fbInfo[0];
+  const hasTwitter = twInfo && twInfo.length && twInfo[0];
+  const hasXid = xInfo && xInfo.length && xInfo[0];
   if (hasFacebook) {
-    let width = 40;
-    let height = 40;
+    const width = 40;
+    const height = 40;
     fbInfo.fb_picture =
       'https://graph.facebook.com/v2.2/' + fbInfo.fb_user_id + '/picture?width=' + width + '&height=' + height;
     delete fbInfo[0].response;
@@ -84,8 +84,8 @@ function getFacebookInfo(uids) {
   return pg.queryP_readOnly('select * from facebook_users where uid in ($1);', uids);
 }
 function createDummyUser() {
-  return new MPromise('createDummyUser', function (resolve, reject) {
-    pg.query('INSERT INTO users (created) VALUES (default) RETURNING uid;', [], function (err, results) {
+  return new MPromise('createDummyUser', (resolve, reject) => {
+    pg.query('INSERT INTO users (created) VALUES (default) RETURNING uid;', [], (err, results) => {
       if (err || !results || !results.rows || !results.rows.length) {
         logger.error('polis_err_create_empty_user', err);
         reject(new Error('polis_err_create_empty_user'));
@@ -95,17 +95,17 @@ function createDummyUser() {
     });
   });
 }
-let pidCache = new LruCache({
+const pidCache = new LruCache({
   max: 9000
 });
 function getPid(zid, uid, callback) {
-  let cacheKey = zid + '_' + uid;
-  let cachedPid = pidCache.get(cacheKey);
+  const cacheKey = zid + '_' + uid;
+  const cachedPid = pidCache.get(cacheKey);
   if (!_.isUndefined(cachedPid)) {
     callback(null, cachedPid);
     return;
   }
-  pg.query_readOnly('SELECT pid FROM participants WHERE zid = ($1) AND uid = ($2);', [zid, uid], function (err, docs) {
+  pg.query_readOnly('SELECT pid FROM participants WHERE zid = ($1) AND uid = ($2);', [zid, uid], (err, docs) => {
     let pid = -1;
     if (docs && docs.rows && docs.rows[0]) {
       pid = docs.rows[0].pid;
@@ -115,15 +115,15 @@ function getPid(zid, uid, callback) {
   });
 }
 function getPidPromise(zid, uid, usePrimary) {
-  let cacheKey = zid + '_' + uid;
-  let cachedPid = pidCache.get(cacheKey);
-  return new MPromise('getPidPromise', function (resolve, reject) {
+  const cacheKey = zid + '_' + uid;
+  const cachedPid = pidCache.get(cacheKey);
+  return new MPromise('getPidPromise', (resolve, reject) => {
     if (!_.isUndefined(cachedPid)) {
       resolve(cachedPid);
       return;
     }
     const f = usePrimary ? pg.query : pg.query_readOnly;
-    f('SELECT pid FROM participants WHERE zid = ($1) AND uid = ($2);', [zid, uid], function (err, results) {
+    f('SELECT pid FROM participants WHERE zid = ($1) AND uid = ($2);', [zid, uid], (err, results) => {
       if (err) {
         return reject(err);
       }
@@ -131,24 +131,24 @@ function getPidPromise(zid, uid, usePrimary) {
         resolve(-1);
         return;
       }
-      let pid = results.rows[0].pid;
+      const pid = results.rows[0].pid;
       pidCache.set(cacheKey, pid);
       resolve(pid);
     });
   });
 }
 function getPidForParticipant(assigner, cache) {
-  return function (req, res, next) {
-    let zid = req.p.zid;
-    let uid = req.p.uid;
+  return (req, res, next) => {
+    const zid = req.p.zid;
+    const uid = req.p.uid;
     function finish(pid) {
       assigner(req, 'pid', pid);
       next();
     }
     getPidPromise(zid, uid).then(
-      function (pid) {
+      (pid) => {
         if (pid === -1) {
-          let msg = 'polis_err_get_pid_for_participant_missing';
+          const msg = 'polis_err_get_pid_for_participant_missing';
           logger.error(msg, {
             zid,
             uid,
@@ -158,7 +158,7 @@ function getPidForParticipant(assigner, cache) {
         }
         finish(pid);
       },
-      function (err) {
+      (err) => {
         logger.error('polis_err_get_pid_for_participant', err);
         next(err);
       }
@@ -167,7 +167,7 @@ function getPidForParticipant(assigner, cache) {
 }
 function getSocialInfoForUsers(uids, zid) {
   uids = _.uniq(uids);
-  uids.forEach(function (uid) {
+  uids.forEach((uid) => {
     if (!_.isNumber(uid)) {
       throw 'polis_err_123123_invalid_uid got:' + uid;
     }
@@ -175,7 +175,7 @@ function getSocialInfoForUsers(uids, zid) {
   if (!uids.length) {
     return Promise.resolve([]);
   }
-  let uidString = uids.join(',');
+  const uidString = uids.join(',');
   return pg.queryP_metered_readOnly(
     'getSocialInfoForUsers',
     'with ' +
@@ -194,7 +194,7 @@ function getSocialInfoForUsers(uids, zid) {
   );
 }
 function getXidRecordByXidOwnerId(xid, owner, zid_optional, x_profile_image_url, x_name, x_email, createIfMissing) {
-  return pg.queryP('select * from xids where xid = ($1) and owner = ($2);', [xid, owner]).then(function (rows) {
+  return pg.queryP('select * from xids where xid = ($1) and owner = ($2);', [xid, owner]).then((rows) => {
     if (!rows || !rows.length) {
       logger.warn('getXidRecordByXidOwnerId: no xInfo yet');
       if (!createIfMissing) {
@@ -240,7 +240,7 @@ function getXidStuff(xid, zid) {
     if (!rows || !rows.length) {
       return 'noXidRecord';
     }
-    let xidRecordForPtpt = rows[0];
+    const xidRecordForPtpt = rows[0];
     if (xidRecordForPtpt) {
       return getPidPromise(zid, xidRecordForPtpt.uid, true).then((pidForXid) => {
         xidRecordForPtpt.pid = pidForXid;

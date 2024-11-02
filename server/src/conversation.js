@@ -1,7 +1,7 @@
 import LruCache from 'lru-cache';
 import pg from './db/pg-query.js';
-import { MPromise } from './utils/metered.js';
 import logger from './utils/logger.js';
+import { MPromise } from './utils/metered.js';
 function createXidRecord(ownerUid, uid, xid, x_profile_image_url, x_name, x_email) {
   return pg.queryP(
     'insert into xids (owner, uid, xid, x_profile_image_url, x_name, x_email) values ($1, $2, $3, $4, $5, $6) ' +
@@ -36,8 +36,8 @@ function isXidWhitelisted(owner, xid) {
   });
 }
 function getConversationInfo(zid) {
-  return new MPromise('getConversationInfo', function (resolve, reject) {
-    pg.query('SELECT * FROM conversations WHERE zid = ($1);', [zid], function (err, result) {
+  return new MPromise('getConversationInfo', (resolve, reject) => {
+    pg.query('SELECT * FROM conversations WHERE zid = ($1);', [zid], (err, result) => {
       if (err) {
         reject(err);
       } else {
@@ -47,11 +47,11 @@ function getConversationInfo(zid) {
   });
 }
 function getConversationInfoByConversationId(conversation_id) {
-  return new MPromise('getConversationInfoByConversationId', function (resolve, reject) {
+  return new MPromise('getConversationInfoByConversationId', (resolve, reject) => {
     pg.query(
       'SELECT * FROM conversations WHERE zid = (select zid from zinvites where zinvite = ($1));',
       [conversation_id],
-      function (err, result) {
+      (err, result) => {
         if (err) {
           reject(err);
         } else {
@@ -65,20 +65,20 @@ const conversationIdToZidCache = new LruCache({
   max: 1000
 });
 function getZidFromConversationId(conversation_id) {
-  return new MPromise('getZidFromConversationId', function (resolve, reject) {
-    let cachedZid = conversationIdToZidCache.get(conversation_id);
+  return new MPromise('getZidFromConversationId', (resolve, reject) => {
+    const cachedZid = conversationIdToZidCache.get(conversation_id);
     if (cachedZid) {
       resolve(cachedZid);
       return;
     }
-    pg.query_readOnly('select zid from zinvites where zinvite = ($1);', [conversation_id], function (err, results) {
+    pg.query_readOnly('select zid from zinvites where zinvite = ($1);', [conversation_id], (err, results) => {
       if (err) {
         return reject(err);
       } else if (!results || !results.rows || !results.rows.length) {
         logger.error('polis_err_fetching_zid_for_conversation_id ' + conversation_id, err);
         return reject('polis_err_fetching_zid_for_conversation_id');
       } else {
-        let zid = results.rows[0].zid;
+        const zid = results.rows[0].zid;
         conversationIdToZidCache.set(conversation_id, zid);
         return resolve(zid);
       }

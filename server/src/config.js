@@ -4,13 +4,13 @@ const devHostname = process.env.API_DEV_HOSTNAME || 'localhost:5000';
 const devMode = isTrue(process.env.DEV_MODE);
 const domainOverride = process.env.DOMAIN_OVERRIDE || null;
 const prodHostname = process.env.API_PROD_HOSTNAME || 'pol.is';
-const serverPort = parseInt(process.env.API_SERVER_PORT || process.env.PORT || '5000', 10);
+const serverPort = Number.parseInt(process.env.API_SERVER_PORT || process.env.PORT || '5000', 10);
 const shouldUseTranslationAPI = isTrue(process.env.SHOULD_USE_TRANSLATION_API);
 
 export default {
-  domainOverride: domainOverride,
+  domainOverride,
   isDevMode: devMode,
-  serverPort: serverPort,
+  serverPort,
   getServerNameWithProtocol: (req) => {
     if (devMode) {
       return `${req.protocol}://${req.headers.host}`;
@@ -51,15 +51,15 @@ export default {
   adminEmails: process.env.ADMIN_EMAILS || '[]',
   adminUIDs: process.env.ADMIN_UIDS || '[]',
   akismetAntispamApiKey: process.env.AKISMET_ANTISPAM_API_KEY || null,
-  googleJigsawPerspectiveApiKey: process.env.GOOGLE_JIGSAW_PERSPECTIVE_API_KEY || null,
   awsRegion: process.env.AWS_REGION,
   backfillCommentLangDetection: isTrue(process.env.BACKFILL_COMMENT_LANG_DETECTION),
   cacheMathResults: isTrueOrBlank(process.env.CACHE_MATH_RESULTS),
-  databaseURL: process.env.DATABASE_URL,
   databaseSSL: isTrue(process.env.DATABASE_SSL),
+  databaseURL: process.env.DATABASE_URL,
   emailTransportTypes: process.env.EMAIL_TRANSPORT_TYPES || null,
   encryptionPassword: process.env.ENCRYPTION_PASSWORD_00001,
   fbAppId: process.env.FB_APP_ID || null,
+  googleJigsawPerspectiveApiKey: process.env.GOOGLE_JIGSAW_PERSPECTIVE_API_KEY || null,
   logLevel: process.env.SERVER_LOG_LEVEL,
   logToFile: isTrue(process.env.SERVER_LOG_TO_FILE),
   mailgunApiKey: process.env.MAILGUN_API_KEY || null,
@@ -72,8 +72,11 @@ export default {
   readOnlyDatabaseURL: process.env.READ_ONLY_DATABASE_URL || process.env.DATABASE_URL,
   runPeriodicExportTests: isTrue(process.env.RUN_PERIODIC_EXPORT_TESTS),
   shouldUseTranslationAPI: setGoogleApplicationCredentials(),
-  staticFilesAdminPort: parseInt(process.env.STATIC_FILES_ADMIN_PORT || process.env.STATIC_FILES_PORT || '8080', 10),
-  staticFilesParticipationPort: parseInt(
+  staticFilesAdminPort: Number.parseInt(
+    process.env.STATIC_FILES_ADMIN_PORT || process.env.STATIC_FILES_PORT || '8080',
+    10
+  ),
+  staticFilesParticipationPort: Number.parseInt(
     process.env.STATIC_FILES_PARTICIPATION_PORT || process.env.STATIC_FILES_PORT || '8080',
     10
   ),

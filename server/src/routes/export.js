@@ -2,10 +2,10 @@ import {
   queryP_readOnly as pgQueryP_readOnly,
   stream_queryP_readOnly as stream_pgQueryP_readOnly
 } from '../db/pg-query.js';
-import { getZinvite, getZidForRid } from '../utils/zinvite.js';
-import { getPca } from '../utils/pca.js';
 import fail from '../utils/fail.js';
 import logger from '../utils/logger.js';
+import { getPca } from '../utils/pca.js';
+import { getZidForRid, getZinvite } from '../utils/zinvite.js';
 const sep = '\n';
 const formatEscapedText = (s) => `"${s.replace(/"/g, '""')}"`;
 function formatCSVHeaders(colFns) {
@@ -54,7 +54,7 @@ async function loadConversationSummary(zid, siteUrl) {
     ['conversation-description', formatEscapedText(convo.description)]
   ].map((row) => row.join(','));
 }
-const formatDatetime = (timestamp) => new Date(parseInt(timestamp)).toString();
+const formatDatetime = (timestamp) => new Date(Number.parseInt(timestamp)).toString();
 async function sendConversationSummary(zid, siteUrl, res) {
   const rows = await loadConversationSummary(zid, siteUrl);
   res.setHeader('content-type', 'text/csv');
@@ -94,7 +94,7 @@ async function sendCommentSummary(zid, res) {
         res.send(
           formatCSV(
             {
-              timestamp: (row) => String(Math.floor(parseInt(row.created) / 1000)),
+              timestamp: (row) => String(Math.floor(Number.parseInt(row.created) / 1000)),
               datetime: (row) => formatDatetime(row.created),
               'comment-id': (row) => String(row.tid),
               'author-id': (row) => String(row.pid),

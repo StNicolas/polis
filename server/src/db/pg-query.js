@@ -1,12 +1,10 @@
-import { isFunction, isString, isUndefined } from 'underscore';
-import pg from 'pg';
-import pgConnectionString from 'pg-connection-string';
+import { Pool } from 'pg';
+import { parse as parsePgConnectionString } from 'pg-connection-string';
 import QueryStream from 'pg-query-stream';
+import { isFunction, isString, isUndefined } from 'underscore';
 import Config from '../config.js';
 import logger from '../utils/logger.js';
 import { MPromise } from '../utils/metered.js';
-const { Pool } = pg;
-const { parse: parsePgConnectionString } = pgConnectionString;
 const usingReplica = Config.databaseURL !== Config.readOnlyDatabaseURL;
 const poolSize = Config.isDevMode ? 2 : usingReplica ? 3 : 12;
 const pgConnection = Object.assign(parsePgConnectionString(Config.databaseURL), {
@@ -17,7 +15,7 @@ const pgConnection = Object.assign(parsePgConnectionString(Config.databaseURL), 
         rejectUnauthorized: false
       }
     : undefined,
-  poolLog: function (str, level) {
+  poolLog: (str, level) => {
     if (pgPoolLevelRanks.indexOf(level) <= pgPoolLoggingLevel) {
       logger.info('pool.primary.' + level + ' ' + str);
     }
@@ -31,7 +29,7 @@ const readsPgConnection = Object.assign(parsePgConnectionString(Config.readOnlyD
         rejectUnauthorized: false
       }
     : undefined,
-  poolLog: function (str, level) {
+  poolLog: (str, level) => {
     if (pgPoolLevelRanks.indexOf(level) <= pgPoolLoggingLevel) {
       logger.info('pool.readonly.' + level + ' ' + str);
     }
@@ -59,7 +57,7 @@ function queryImpl(pool, queryString, ...args) {
         logger.error('pg_connect_pool_fail', err);
         return reject(err);
       }
-      client.query(queryString, params, function (err, results) {
+      client.query(queryString, params, (err, results) => {
         if (err) {
           release(err);
           if (callback) callback(err);
@@ -85,8 +83,8 @@ function queryP_impl(pool, queryString, params) {
   if (!isString(queryString)) {
     return Promise.reject('query_was_not_string');
   }
-  return new Promise(function (resolve, reject) {
-    queryImpl(pool, queryString, params, function (err, result) {
+  return new Promise((resolve, reject) => {
+    queryImpl(pool, queryString, params, (err, result) => {
       if (err) {
         return reject(err);
       }
@@ -117,7 +115,7 @@ function queryP_metered_impl(isReadOnly, name, queryString, params) {
   if (isUndefined(name) || isUndefined(queryString) || isUndefined(params)) {
     throw new Error('polis_err_queryP_metered_impl missing params');
   }
-  return new MPromise(name, function (resolve, reject) {
+  return new MPromise(name, (resolve, reject) => {
     f(queryString, params).then(resolve, reject);
   });
 }

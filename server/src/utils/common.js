@@ -10,14 +10,14 @@ function strToHex(str) {
 }
 function hexToStr(hexString) {
   let j;
-  let hexes = hexString.match(/.{1,4}/g) || [];
+  const hexes = hexString.match(/.{1,4}/g) || [];
   let str = '';
   for (j = 0; j < hexes.length; j++) {
-    str += String.fromCharCode(parseInt(hexes[j], 16));
+    str += String.fromCharCode(Number.parseInt(hexes[j], 16));
   }
   return str;
 }
-let polisTypes = {
+const polisTypes = {
   reactions: {
     push: 1,
     pull: -1,

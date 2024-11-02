@@ -1,8 +1,8 @@
-import _ from 'underscore';
 import url from 'url';
+import _ from 'underscore';
 import Config from '../config.js';
-import User from '../user.js';
 import Session from '../session.js';
+import User from '../user.js';
 const COOKIES = {
   COOKIE_TEST: 'ct',
   HAS_EMAIL: 'e',
@@ -23,7 +23,7 @@ const COOKIES_TO_CLEAR = {
   referrer: true,
   parent_url: true
 };
-let oneYear = 1000 * 60 * 60 * 24 * 365;
+const oneYear = 1000 * 60 * 60 * 24 * 365;
 function cookieDomain(req) {
   const origin = req?.headers?.origin || '';
   const parsedOrigin = url.parse(origin);
@@ -80,9 +80,9 @@ function setCookieTestCookie(req, res) {
   setCookie(req, res, COOKIES.COOKIE_TEST, 1, {});
 }
 function addCookies(req, res, token, uid) {
-  return User.getUserInfoForUid2(uid).then(function (opts) {
-    let email = opts.email;
-    let created = opts.created;
+  return User.getUserInfoForUid2(uid).then((opts) => {
+    const email = opts.email;
+    const created = opts.created;
     setTokenCookie(req, res, token);
     setUidCookie(req, res, uid);
     setHasEmailCookie(req, res, email);
@@ -95,7 +95,7 @@ function addCookies(req, res, token, uid) {
 }
 function getPermanentCookieAndEnsureItIsSet(req, res) {
   if (!req.cookies[COOKIES.PERMANENT_COOKIE]) {
-    let token = Session.makeSessionToken();
+    const token = Session.makeSessionToken();
     setPermanentCookie(req, res, token);
     return token;
   } else {

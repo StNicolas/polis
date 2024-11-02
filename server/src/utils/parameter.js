@@ -1,11 +1,11 @@
+import LruCache from 'lru-cache';
 import _ from 'underscore';
 import { isUri } from 'valid-url';
-import LruCache from 'lru-cache';
+import Conversation from '../conversation.js';
 import pg from '../db/pg-query.js';
+import User from '../user.js';
 import fail from './fail.js';
 import logger from './logger.js';
-import Conversation from '../conversation.js';
-import User from '../user.js';
 import { MPromise } from './metered.js';
 function moveToBody(req, res, next) {
   if (req.query) {
@@ -96,36 +96,36 @@ function extractFromHeader(req, name) {
   return req.headers[name.toLowerCase()];
 }
 function buildCallback(config) {
-  let name = config.name;
-  let parserWhichReturnsPromise = config.parserWhichReturnsPromise;
-  let assigner = config.assigner;
-  let required = config.required;
-  let defaultVal = config.defaultVal;
-  let extractor = config.extractor;
+  const name = config.name;
+  const parserWhichReturnsPromise = config.parserWhichReturnsPromise;
+  const assigner = config.assigner;
+  const required = config.required;
+  const defaultVal = config.defaultVal;
+  const extractor = config.extractor;
   if (typeof assigner !== 'function') {
     throw new Error('bad arg for assigner');
   }
   if (typeof parserWhichReturnsPromise !== 'function') {
     throw new Error('bad arg for parserWhichReturnsPromise');
   }
-  return function (req, res, next) {
-    let val = extractor(req, name);
+  return (req, res, next) => {
+    const val = extractor(req, name);
     if (!_.isUndefined(val) && !_.isNull(val)) {
       parserWhichReturnsPromise(val)
         .then(
-          function (parsed) {
+          (parsed) => {
             assigner(req, name, parsed);
             next();
           },
-          function (err) {
-            let s = `polis_err_param_parse_failed_${name} (val='${val}', error=${err})`;
+          (err) => {
+            const s = `polis_err_param_parse_failed_${name} (val='${val}', error=${err})`;
             logger.error(s, err);
             res.status(400);
             next(s);
             return;
           }
         )
-        .catch(function (err) {
+        .catch((err) => {
           fail(res, 400, 'polis_err_misc', err);
           return;
         });
@@ -135,7 +135,7 @@ function buildCallback(config) {
       }
       next();
     } else {
-      let s = 'polis_err_param_missing_' + name;
+      const s = 'polis_err_param_missing_' + name;
       logger.error(s);
       res.status(400);
       next(s);
@@ -146,7 +146,7 @@ function isEmail(s) {
   return typeof s === 'string' && s.length < 999 && s.indexOf('@') > 0;
 }
 function getEmail(s) {
-  return new Promise(function (resolve, reject) {
+  return new Promise((resolve, reject) => {
     if (!isEmail(s)) {
       return reject('polis_fail_parse_email');
     }
@@ -154,7 +154,7 @@ function getEmail(s) {
   });
 }
 function getPassword(s) {
-  return new Promise(function (resolve, reject) {
+  return new Promise((resolve, reject) => {
     if (typeof s !== 'string' || s.length > 999 || s.length === 0) {
       return reject('polis_fail_parse_password');
     }
@@ -162,7 +162,7 @@ function getPassword(s) {
   });
 }
 function getPasswordWithCreatePasswordRules(s) {
-  return getPassword(s).then(function (s) {
+  return getPassword(s).then((s) => {
     if (typeof s !== 'string' || s.length < 6) {
       throw new Error('polis_err_password_too_short');
     }
@@ -170,23 +170,22 @@ function getPasswordWithCreatePasswordRules(s) {
   });
 }
 function getOptionalStringLimitLength(limit) {
-  return function (s) {
-    return new Promise(function (resolve, reject) {
+  return (s) =>
+    new Promise((resolve, reject) => {
       if (s.length && s.length > limit) {
         return reject('polis_fail_parse_string_too_long');
       }
       s = s.replace(/^ */, '').replace(/ *$/, '');
       resolve(s);
     });
-  };
 }
 function getStringLimitLength(min, max) {
   if (_.isUndefined(max)) {
     max = min;
     min = 1;
   }
-  return function (s) {
-    return new Promise(function (resolve, reject) {
+  return (s) =>
+    new Promise((resolve, reject) => {
       if (typeof s !== 'string') {
         return reject('polis_fail_parse_string_missing');
       }
@@ -199,27 +198,27 @@ function getStringLimitLength(min, max) {
       s = s.replace(/^ */, '').replace(/ *$/, '');
       resolve(s);
     });
-  };
 }
 function getUrlLimitLength(limit) {
-  return function (s) {
-    getStringLimitLength(limit)(s).then(function (s) {
-      return new Promise(function (resolve, reject) {
-        if (isUri(s)) {
-          return resolve(s);
-        } else {
-          return reject('polis_fail_parse_url_invalid');
-        }
-      });
-    });
+  return (s) => {
+    getStringLimitLength(limit)(s).then(
+      (s) =>
+        new Promise((resolve, reject) => {
+          if (isUri(s)) {
+            return resolve(s);
+          } else {
+            return reject('polis_fail_parse_url_invalid');
+          }
+        })
+    );
   };
 }
 function getInt(s) {
-  return new Promise(function (resolve, reject) {
+  return new Promise((resolve, reject) => {
     if (_.isNumber(s) && s >> 0 === s) {
       return resolve(s);
     }
-    let x = parseInt(s);
+    const x = Number.parseInt(s);
     if (isNaN(x)) {
       return reject('polis_fail_parse_int ' + s);
     }
@@ -227,8 +226,8 @@ function getInt(s) {
   });
 }
 function getBool(s) {
-  return new Promise(function (resolve, reject) {
-    let type = typeof s;
+  return new Promise((resolve, reject) => {
+    const type = typeof s;
     if ('boolean' === type) {
       return resolve(s);
     }
@@ -248,34 +247,33 @@ function getBool(s) {
   });
 }
 function getIntInRange(min, max) {
-  return function (s) {
-    return getInt(s).then(function (x) {
+  return (s) =>
+    getInt(s).then((x) => {
       if (x < min || max < x) {
         throw new Error('polis_fail_parse_int_out_of_range');
       }
       return x;
     });
-  };
 }
 const reportIdToRidCache = new LruCache({
   max: 1000
 });
 const getZidFromConversationId = Conversation.getZidFromConversationId;
 function getRidFromReportId(report_id) {
-  return new MPromise('getRidFromReportId', function (resolve, reject) {
-    let cachedRid = reportIdToRidCache.get(report_id);
+  return new MPromise('getRidFromReportId', (resolve, reject) => {
+    const cachedRid = reportIdToRidCache.get(report_id);
     if (cachedRid) {
       resolve(cachedRid);
       return;
     }
-    pg.query_readOnly('select rid from reports where report_id = ($1);', [report_id], function (err, results) {
+    pg.query_readOnly('select rid from reports where report_id = ($1);', [report_id], (err, results) => {
       logger.error('polis_err_fetching_rid_for_report_id ' + report_id, err);
       if (err) {
         return reject(err);
       } else if (!results || !results.rows || !results.rows.length) {
         return reject('polis_err_fetching_rid_for_report_id');
       } else {
-        let rid = results.rows[0].rid;
+        const rid = results.rows[0].rid;
         reportIdToRidCache.set(report_id, rid);
         return resolve(rid);
       }
@@ -284,26 +282,20 @@ function getRidFromReportId(report_id) {
 }
 const parseConversationId = getStringLimitLength(1, 100);
 function getConversationIdFetchZid(s) {
-  return parseConversationId(s).then(function (conversation_id) {
-    return getZidFromConversationId(conversation_id).then(function (zid) {
-      return Number(zid);
-    });
-  });
+  return parseConversationId(s).then((conversation_id) =>
+    getZidFromConversationId(conversation_id).then((zid) => Number(zid))
+  );
 }
 const parseReportId = getStringLimitLength(1, 100);
 function getReportIdFetchRid(s) {
-  return parseReportId(s).then(function (report_id) {
-    return getRidFromReportId(report_id).then(function (rid) {
-      return Number(rid);
-    });
-  });
+  return parseReportId(s).then((report_id) => getRidFromReportId(report_id).then((rid) => Number(rid)));
 }
 function getNumber(s) {
-  return new Promise(function (resolve, reject) {
+  return new Promise((resolve, reject) => {
     if (_.isNumber(s)) {
       return resolve(s);
     }
-    let x = parseFloat(s);
+    const x = Number.parseFloat(s);
     if (isNaN(x)) {
       return reject('polis_fail_parse_number');
     }
@@ -311,17 +303,16 @@ function getNumber(s) {
   });
 }
 function getNumberInRange(min, max) {
-  return function (s) {
-    return getNumber(s).then(function (x) {
+  return (s) =>
+    getNumber(s).then((x) => {
       if (x < min || max < x) {
         throw new Error('polis_fail_parse_number_out_of_range');
       }
       return x;
     });
-  };
 }
 function getArrayOfString(a, maxStrings, maxLength) {
-  return new Promise(function (resolve, reject) {
+  return new Promise((resolve, reject) => {
     let result;
     if (_.isString(a)) {
       result = a.split(',');
@@ -339,14 +330,10 @@ function getArrayOfStringNonEmpty(a, maxStrings, maxLength) {
   return getArrayOfString(a);
 }
 function getArrayOfStringLimitLength(maxStrings, maxLength) {
-  return function (a) {
-    return getArrayOfString(a, maxStrings || 999999999, maxLength);
-  };
+  return (a) => getArrayOfString(a, maxStrings || 999999999, maxLength);
 }
 function getArrayOfStringNonEmptyLimitLength(maxStrings, maxLength) {
-  return function (a) {
-    return getArrayOfStringNonEmpty(a, maxStrings || 999999999, maxLength);
-  };
+  return (a) => getArrayOfStringNonEmpty(a, maxStrings || 999999999, maxLength);
 }
 function getArrayOfInt(a) {
   if (_.isString(a)) {
@@ -368,7 +355,7 @@ function assignToP(req, name, x) {
   req.p[name] = x;
 }
 function assignToPCustom(name) {
-  return function (req, ignoredName, x) {
+  return (req, ignoredName, x) => {
     assignToP(req, name, x);
   };
 }
@@ -377,21 +364,21 @@ function resolve_pidThing(pidThingStringName, assigner, loggingString) {
     loggingString = '';
   }
   logger.debug('resolve_pidThing ' + loggingString);
-  return function (req, res, next) {
+  return (req, res, next) => {
     if (!req.p) {
       fail(res, 500, 'polis_err_this_middleware_should_be_after_auth_and_zid');
       next('polis_err_this_middleware_should_be_after_auth_and_zid');
     }
-    let existingValue = extractFromBody(req, pidThingStringName) || extractFromCookie(req, pidThingStringName);
+    const existingValue = extractFromBody(req, pidThingStringName) || extractFromCookie(req, pidThingStringName);
     if (existingValue === 'mypid' && req?.p?.zid && req.p.uid) {
       User.getPidPromise(req.p.zid, req.p.uid)
-        .then(function (pid) {
+        .then((pid) => {
           if (pid >= 0) {
             assigner(req, pidThingStringName, pid);
           }
           next();
         })
-        .catch(function (err) {
+        .catch((err) => {
           fail(res, 500, 'polis_err_mypid_resolve_error', err);
           next(err);
         });
@@ -399,11 +386,11 @@ function resolve_pidThing(pidThingStringName, assigner, loggingString) {
       next();
     } else if (!_.isUndefined(existingValue)) {
       getInt(existingValue)
-        .then(function (pidNumber) {
+        .then((pidNumber) => {
           assigner(req, pidThingStringName, pidNumber);
           next();
         })
-        .catch(function (err) {
+        .catch((err) => {
           fail(res, 500, 'polis_err_pid_error', err);
           next(err);
         });

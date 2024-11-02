@@ -1,13 +1,13 @@
-import _ from 'underscore';
 import Translate from '@google-cloud/translate';
-import pg from './db/pg-query.js';
-import SQL from './db/sql.js';
-import { MPromise } from './utils/metered.js';
-import Utils from './utils/common.js';
-import logger from './utils/logger.js';
+import _ from 'underscore';
 import Config from './config.js';
 import Conversation from './conversation.js';
+import pg from './db/pg-query.js';
+import SQL from './db/sql.js';
 import User from './user.js';
+import Utils from './utils/common.js';
+import logger from './utils/logger.js';
+import { MPromise } from './utils/metered.js';
 const useTranslateApi = Config.shouldUseTranslationAPI;
 const translateClient = useTranslateApi ? Translate() : null;
 function getComment(zid, tid) {
@@ -16,14 +16,14 @@ function getComment(zid, tid) {
   });
 }
 function getComments(o) {
-  let commentListPromise = o.moderation ? _getCommentsForModerationList(o) : _getCommentsList(o);
-  let convPromise = Conversation.getConversationInfo(o.zid);
+  const commentListPromise = o.moderation ? _getCommentsForModerationList(o) : _getCommentsList(o);
+  const convPromise = Conversation.getConversationInfo(o.zid);
   let conv = null;
   return Promise.all([convPromise, commentListPromise])
-    .then(function (a) {
+    .then((a) => {
       let rows = a[1];
       conv = a[0];
-      let cols = [
+      const cols = [
         'txt',
         'tid',
         'created',
@@ -46,8 +46,8 @@ function getComments(o) {
         cols.push('pass_count');
         cols.push('count');
       }
-      rows = rows.map(function (row) {
-        let x = _.pick(row, cols);
+      rows = rows.map((row) => {
+        const x = _.pick(row, cols);
         if (!_.isUndefined(x.count)) {
           x.count = Number(x.count);
         }
@@ -55,17 +55,15 @@ function getComments(o) {
       });
       return rows;
     })
-    .then(function (comments) {
-      let include_social = !conv?.is_anon && o.include_social;
+    .then((comments) => {
+      const include_social = !conv?.is_anon && o.include_social;
       if (include_social) {
-        let nonAnonComments = comments.filter(function (c) {
-          return !c.anon && !c.is_seed;
-        });
-        let uids = _.pluck(nonAnonComments, 'uid');
-        return User.getSocialInfoForUsers(uids, o.zid).then(function (socialInfos) {
-          let uidToSocialInfo = {};
-          socialInfos.forEach(function (info) {
-            let infoToReturn = _.pick(info, [
+        const nonAnonComments = comments.filter((c) => !c.anon && !c.is_seed);
+        const uids = _.pluck(nonAnonComments, 'uid');
+        return User.getSocialInfoForUsers(uids, o.zid).then((socialInfos) => {
+          const uidToSocialInfo = {};
+          socialInfos.forEach((info) => {
+            const infoToReturn = _.pick(info, [
               'fb_name',
               'fb_link',
               'fb_user_id',
@@ -81,21 +79,21 @@ function getComments(o) {
             infoToReturn.tw_followers_count = info.followers_count;
             if (info.fb_public_profile) {
               try {
-                let temp = JSON.parse(info.fb_public_profile);
+                const temp = JSON.parse(info.fb_public_profile);
                 infoToReturn.fb_verified = temp.verified;
               } catch (err) {
                 logger.error('error parsing JSON of fb_public_profile for uid: ' + info.uid, err);
               }
             }
             if (!_.isUndefined(infoToReturn.fb_user_id)) {
-              let width = 40;
-              let height = 40;
+              const width = 40;
+              const height = 40;
               infoToReturn.fb_picture = `https://graph.facebook.com/v2.2/${infoToReturn.fb_user_id}/picture?width=${width}&height=${height}`;
             }
             uidToSocialInfo[info.uid] = infoToReturn;
           });
-          return comments.map(function (c) {
-            let s = uidToSocialInfo[c.uid];
+          return comments.map((c) => {
+            const s = uidToSocialInfo[c.uid];
             if (s) {
               if (!c.anon) {
                 c.social = s;
@@ -108,8 +106,8 @@ function getComments(o) {
         return comments;
       }
     })
-    .then(function (comments) {
-      comments.forEach(function (c) {
+    .then((comments) => {
+      comments.forEach((c) => {
         delete c.uid;
         delete c.anon;
       });
@@ -126,7 +124,7 @@ function _getCommentsForModerationList(o) {
   }
   return strictCheck.then((strict_moderation) => {
     let modClause = '';
-    let params = [o.zid];
+    const params = [o.zid];
     if (!_.isUndefined(o.mod)) {
       modClause = ' and comments.mod = ($2)';
       params.push(o.mod);
@@ -163,10 +161,10 @@ function _getCommentsForModerationList(o) {
         params
       )
       .then((rows) => {
-        let adp = {};
+        const adp = {};
         for (let i = 0; i < rows.length; i++) {
-          let row = rows[i];
-          let o = (adp[row.tid] = adp[row.tid] || {
+          const row = rows[i];
+          const o = (adp[row.tid] = adp[row.tid] || {
             agree_count: 0,
             disagree_count: 0,
             pass_count: 0
@@ -183,7 +181,7 @@ function _getCommentsForModerationList(o) {
           return row.tid;
         });
         for (let i = 0; i < rows.length; i++) {
-          let row = rows[i];
+          const row = rows[i];
           row.agree_count = adp[row.tid].agree_count;
           row.disagree_count = adp[row.tid].disagree_count;
           row.pass_count = adp[row.tid].pass_count;
@@ -194,8 +192,8 @@ function _getCommentsForModerationList(o) {
   });
 }
 function _getCommentsList(o) {
-  return new MPromise('_getCommentsList', function (resolve, reject) {
-    Conversation.getConversationInfo(o.zid).then(function (conv) {
+  return new MPromise('_getCommentsList', (resolve, reject) => {
+    Conversation.getConversationInfo(o.zid).then((conv) => {
       let q = SQL.sql_comments.select(SQL.sql_comments.star()).where(SQL.sql_comments.zid.equals(o.zid));
       if (!_.isUndefined(o.pid)) {
         q = q.and(SQL.sql_comments.pid.equals(o.pid));
@@ -244,7 +242,7 @@ function _getCommentsList(o) {
       } else {
         q = q.limit(999);
       }
-      return pg.query(q.toString(), [], function (err, docs) {
+      return pg.query(q.toString(), [], (err, docs) => {
         if (err) {
           reject(err);
           return;
