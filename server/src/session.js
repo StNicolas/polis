@@ -124,6 +124,17 @@ function clearPwResetToken(pwresettoken, cb) {
     cb(null);
   });
 }
+export {
+  encrypt,
+  decrypt,
+  makeSessionToken,
+  getUserInfoForSessionToken,
+  startSession,
+  endSession,
+  setupPwReset,
+  getUidForPwResetToken,
+  clearPwResetToken
+};
 export default {
   encrypt,
   decrypt,

@@ -1,5 +1,5 @@
-import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import _ from 'underscore';
 import pg from '../db/pg-query.js';
 function generateHashedPassword(password, callback) {
@@ -78,6 +78,7 @@ function generateTokenP(len, pseudoRandomOk) {
     });
   });
 }
+export { generateHashedPassword, checkPassword, generateToken, generateTokenP };
 export default {
   generateHashedPassword,
   checkPassword,

@@ -1,6 +1,10 @@
 import LruCache from 'lru-cache';
 import _ from 'underscore';
-import pg from '../db/pg-query.js';
+import {
+  queryP as pgQueryP,
+  query_readOnly as pgQuery_readOnly,
+  queryP_metered as pgQueryP_metered
+} from '../db/pg-query.js';
 import { MPromise } from './metered.js';
 const zidToConversationIdCache = new LruCache({
   max: 1000
@@ -10,7 +14,7 @@ export function getZinvite(zid, dontUseCache) {
   if (!dontUseCache && cachedConversationId) {
     return Promise.resolve(cachedConversationId);
   }
-  return pg.queryP_metered('getZinvite', 'select * from zinvites where zid = ($1);', [zid]).then((rows) => {
+  return pgQueryP_metered('getZinvite', 'select * from zinvites where zid = ($1);', [zid]).then((rows) => {
     const conversation_id = rows?.[0]?.zinvite || void 0;
     if (conversation_id) {
       zidToConversationIdCache.set(zid, conversation_id);
@@ -45,7 +49,7 @@ export function getZinvites(zids) {
       resolve(makeZidToConversationIdMap([zidsWithCachedConversationIds]));
       return;
     }
-    pg.query_readOnly(`select * from zinvites where zid in (${uncachedZids.join(',')});`, [], (err, result) => {
+    pgQuery_readOnly(`select * from zinvites where zid in (${uncachedZids.join(',')});`, [], (err, result) => {
       if (err) {
         reject(err);
       } else {
@@ -55,7 +59,7 @@ export function getZinvites(zids) {
   });
 }
 export function getZidForRid(rid) {
-  return pg.queryP('select zid from reports where rid = ($1);', [rid]).then((row) => {
+  return pgQueryP('select zid from reports where rid = ($1);', [rid]).then((row) => {
     if (!row || !row.length) {
       return null;
     }

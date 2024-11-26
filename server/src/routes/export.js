@@ -1,14 +1,17 @@
-import pg from '../db/pg-query.js';
+import {
+  queryP_readOnly as pgQueryP_readOnly,
+  stream_queryP_readOnly as stream_pgQueryP_readOnly
+} from '../db/pg-query.js';
+import { getZinvite, getZidForRid } from '../utils/zinvite.js';
+import { getPca } from '../utils/pca.js';
 import fail from '../utils/fail.js';
 import logger from '../utils/logger.js';
-import { getPca } from '../utils/pca.js';
-import { getZidForRid, getZinvite } from '../utils/zinvite.js';
 const sep = '\n';
-const formatEscapedText = (s) => `"${s.replace(/"/g, '""')}"`;
-function formatCSVHeaders(colFns) {
+export const formatEscapedText = (s) => `"${s.replace(/"/g, '""')}"`;
+export function formatCSVHeaders(colFns) {
   return Object.keys(colFns).join(',');
 }
-function formatCSVRow(row, colFns) {
+export function formatCSVRow(row, colFns) {
   const fns = Object.values(colFns);
   let csv = '';
   for (let ii = 0; ii < fns.length; ii += 1) {
@@ -17,7 +20,7 @@ function formatCSVRow(row, colFns) {
   }
   return csv;
 }
-function formatCSV(colFns, rows) {
+export function formatCSV(colFns, rows) {
   let csv = formatCSVHeaders(colFns) + sep;
   if (rows.length > 0) {
     for (const row of rows) {
@@ -27,11 +30,11 @@ function formatCSV(colFns, rows) {
   }
   return csv;
 }
-async function loadConversationSummary(zid, siteUrl) {
+export async function loadConversationSummary(zid, siteUrl) {
   const [zinvite, convoRows, commentersRow, pca] = await Promise.all([
     getZinvite(zid),
-    pg.queryP_readOnly('SELECT topic, description FROM conversations WHERE zid = $1', [zid]),
-    pg.queryP_readOnly('SELECT COUNT(DISTINCT pid) FROM comments WHERE zid = $1', [zid]),
+    pgQueryP_readOnly('SELECT topic, description FROM conversations WHERE zid = $1', [zid]),
+    pgQueryP_readOnly('SELECT COUNT(DISTINCT pid) FROM comments WHERE zid = $1', [zid]),
     getPca(zid)
   ]);
   if (!zinvite || !convoRows || !commentersRow || !pca) {
@@ -51,16 +54,16 @@ async function loadConversationSummary(zid, siteUrl) {
     ['conversation-description', formatEscapedText(convo.description)]
   ].map((row) => row.join(','));
 }
-const formatDatetime = (timestamp) => new Date(Number.parseInt(timestamp)).toString();
-async function sendConversationSummary(zid, siteUrl, res) {
+export const formatDatetime = (timestamp) => new Date(Number.parseInt(timestamp)).toString();
+export async function sendConversationSummary(zid, siteUrl, res) {
   const rows = await loadConversationSummary(zid, siteUrl);
   res.setHeader('content-type', 'text/csv');
   res.send(rows.join(sep));
 }
-async function sendCommentSummary(zid, res) {
+export async function sendCommentSummary(zid, res) {
   const comments = new Map();
   try {
-    const commentRows = await pg.queryP_readOnly(
+    const commentRows = await pgQueryP_readOnly(
       'SELECT tid, pid, created, txt, mod, velocity, active FROM comments WHERE zid = ($1)',
       [zid]
     );
@@ -70,7 +73,7 @@ async function sendCommentSummary(zid, res) {
       comment.pass = 0;
       comments.set(comment.tid, comment);
     }
-    pg.stream_queryP_readOnly(
+    stream_pgQueryP_readOnly(
       'SELECT tid, vote FROM votes WHERE zid = ($1) ORDER BY tid',
       [zid],
       (row) => {
@@ -113,7 +116,7 @@ async function sendCommentSummary(zid, res) {
     fail(res, 500, 'polis_err_data_export', err);
   }
 }
-async function sendVotesSummary(zid, res) {
+export async function sendVotesSummary(zid, res) {
   const formatters = {
     timestamp: (row) => String(Math.floor(row.timestamp / 1000)),
     datetime: (row) => formatDatetime(row.timestamp),
@@ -123,7 +126,7 @@ async function sendVotesSummary(zid, res) {
   };
   res.setHeader('Content-Type', 'text/csv');
   res.write(formatCSVHeaders(formatters) + sep);
-  pg.stream_queryP_readOnly(
+  stream_pgQueryP_readOnly(
     'SELECT created as timestamp, tid, pid, vote FROM votes WHERE zid = $1 ORDER BY tid, pid',
     [zid],
     (row) => res.write(formatCSVRow(row, formatters) + sep),
@@ -134,8 +137,8 @@ async function sendVotesSummary(zid, res) {
     }
   );
 }
-async function sendParticipantVotesSummary(zid, res) {
-  const commentRows = await pg.queryP_readOnly(
+export async function sendParticipantVotesSummary(zid, res) {
+  const commentRows = await pgQueryP_readOnly(
     'SELECT tid, pid FROM comments WHERE zid = ($1) ORDER BY tid ASC, created ASC',
     [zid]
   );
@@ -181,7 +184,7 @@ async function sendParticipantVotesSummary(zid, res) {
     ];
     res.write(values.map((value) => (value === undefined ? '' : String(value))).join(',') + sep);
   }
-  pg.stream_queryP_readOnly(
+  stream_pgQueryP_readOnly(
     'SELECT pid, tid, vote FROM votes WHERE zid = ($1) ORDER BY pid',
     [zid],
     (row) => {

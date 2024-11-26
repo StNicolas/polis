@@ -1,13 +1,10 @@
-import pg from 'pg';
-import pgConnectionString from 'pg-connection-string';
-import QueryStream from 'pg-query-stream';
 import { isFunction, isString, isUndefined } from 'underscore';
+import { Pool } from 'pg';
+import { parse as parsePgConnectionString } from 'pg-connection-string';
+import QueryStream from 'pg-query-stream';
 import Config from '../config.js';
 import logger from '../utils/logger.js';
 import { MPromise } from '../utils/metered.js';
-
-const { Pool } = pg;
-const { parse: parsePgConnectionString } = pgConnectionString;
 const usingReplica = Config.databaseURL !== Config.readOnlyDatabaseURL;
 const poolSize = Config.isDevMode ? 2 : usingReplica ? 3 : 12;
 const pgConnection = Object.assign(parsePgConnectionString(Config.databaseURL), {
@@ -148,6 +145,16 @@ function stream_queryP_readOnly(queryString, params, onRow, onEnd, onError) {
     });
   });
 }
+export {
+  query,
+  query_readOnly,
+  queryP,
+  queryP_metered,
+  queryP_metered_readOnly,
+  queryP_readOnly,
+  queryP_readOnly_wRetryIfEmpty,
+  stream_queryP_readOnly
+};
 export default {
   query,
   query_readOnly,

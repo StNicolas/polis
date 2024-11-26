@@ -1,41 +1,13 @@
 import './src/init.js';
-import bluebird from 'bluebird';
 import express from 'express';
 import morgan from 'morgan';
 import Config from './src/config.js';
 import server from './src/server.js';
 import logger from './src/utils/logger.js';
-
-import {
-  assignToP,
-  assignToPCustom,
-  getArrayOfInt,
-  getArrayOfStringNonEmpty,
-  getArrayOfStringNonEmptyLimitLength,
-  getBool,
-  getConversationIdFetchZid,
-  getEmail,
-  getInt,
-  getIntInRange,
-  getNumberInRange,
-  getOptionalStringLimitLength,
-  getPassword,
-  getPasswordWithCreatePasswordRules,
-  getReportIdFetchRid,
-  getStringLimitLength,
-  getUrlLimitLength,
-  moveToBody,
-  need,
-  resolve_pidThing,
-  want,
-  wantCookie,
-  wantHeader
-} from './src/utils/parameter.js';
-
 const app = express();
 app.use(morgan('dev'));
 app.set('trust proxy', 'uniquelocal');
-const helpersInitialized = new bluebird.Promise((resolve, _reject) => {
+const helpersInitialized = new Promise((resolve, _reject) => {
   resolve(server.initializePolisHelpers());
 });
 helpersInitialized.then(
@@ -99,7 +71,6 @@ helpersInitialized.then(
       handle_GET_implicit_conversation_generation,
       handle_GET_launchPrep,
       handle_GET_locations,
-      handle_GET_logMaxmindResponse,
       handle_GET_math_pca,
       handle_GET_math_pca2,
       handle_GET_metadata,
@@ -174,6 +145,33 @@ helpersInitialized.then(
       handle_PUT_reports,
       handle_PUT_users
     } = o;
+    const {
+      assignToP,
+      assignToPCustom,
+      getArrayOfInt,
+      getArrayOfStringNonEmpty,
+      getArrayOfStringNonEmptyLimitLength,
+      getBool,
+      getConversationIdFetchZid,
+      getEmail,
+      getInt,
+      getIntInRange,
+      getNumberInRange,
+      getOptionalStringLimitLength,
+      getPassword,
+      getPasswordWithCreatePasswordRules,
+      getReportIdFetchRid,
+      getStringLimitLength,
+      getUrlLimitLength,
+      moveToBody,
+      need,
+      needCookie,
+      needHeader,
+      resolve_pidThing,
+      want,
+      wantCookie,
+      wantHeader
+    } = require('./src/utils/parameter');
     app.disable('x-powered-by');
     app.use(middleware_responseTime_start);
     app.use(redirectIfNotHttps);
@@ -582,13 +580,6 @@ helpersInitialized.then(
       need('conversation_id', getConversationIdFetchZid, assignToPCustom('zid')),
       want('show_translation_activated', getBool, assignToP),
       handle_PUT_participants_extended
-    );
-    app.get(
-      '/api/v3/logMaxmindResponse',
-      auth(assignToP),
-      need('user_uid', getInt, assignToP),
-      need('conversation_id', getConversationIdFetchZid, assignToPCustom('zid')),
-      handle_GET_logMaxmindResponse
     );
     app.post(
       '/api/v3/ptptCommentMod',

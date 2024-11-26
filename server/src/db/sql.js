@@ -1,3 +1,4 @@
+import Config from '../config.js';
 import sql from 'sql';
 const sql_conversations = sql.define({
   name: 'conversations',
@@ -52,21 +53,23 @@ const sql_participant_metadata_answers = sql.define({
   name: 'participant_metadata_answers',
   columns: ['pmaid', 'pmqid', 'zid', 'value', 'alive']
 });
+const baseParticipantsExtendedColumns = [
+  'uid',
+  'zid',
+  'referrer',
+  'parent_url',
+  'created',
+  'modified',
+  'show_translation_activated',
+  'permanent_cookie',
+  'origin'
+];
 const sql_participants_extended = sql.define({
   name: 'participants_extended',
-  columns: [
-    'uid',
-    'zid',
-    'referrer',
-    'parent_url',
-    'created',
-    'modified',
-    'show_translation_activated',
-    'permanent_cookie',
-    'origin',
-    'encrypted_ip_address',
-    'encrypted_x_forwarded_for'
-  ]
+  columns:
+    Config.applicationName === 'PolisWebServer'
+      ? [...baseParticipantsExtendedColumns, 'encrypted_ip_address', 'encrypted_x_forwarded_for']
+      : baseParticipantsExtendedColumns
 });
 const sql_users = sql.define({
   name: 'users',
@@ -97,6 +100,15 @@ const sql_reports = sql.define({
     'label_group_9'
   ]
 });
+export {
+  sql_conversations,
+  sql_comments,
+  sql_votes_latest_unique,
+  sql_participant_metadata_answers,
+  sql_participants_extended,
+  sql_reports,
+  sql_users
+};
 export default {
   sql_conversations,
   sql_comments,

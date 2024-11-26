@@ -1,8 +1,8 @@
-import url from 'url';
 import _ from 'underscore';
+import url from 'url';
 import Config from '../config.js';
-import Session from '../session.js';
 import User from '../user.js';
+import Session from '../session.js';
 const COOKIES = {
   COOKIE_TEST: 'ct',
   HAS_EMAIL: 'e',

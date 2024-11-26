@@ -1,13 +1,13 @@
-import Translate from '@google-cloud/translate';
 import _ from 'underscore';
-import Config from './config.js';
-import Conversation from './conversation.js';
+import Translate from '@google-cloud/translate';
 import pg from './db/pg-query.js';
 import SQL from './db/sql.js';
-import User from './user.js';
+import { MPromise } from './utils/metered.js';
 import Utils from './utils/common.js';
 import logger from './utils/logger.js';
-import { MPromise } from './utils/metered.js';
+import Config from './config.js';
+import Conversation from './conversation.js';
+import User from './user.js';
 const useTranslateApi = Config.shouldUseTranslationAPI;
 const translateClient = useTranslateApi ? Translate() : null;
 function getComment(zid, tid) {
@@ -299,6 +299,15 @@ function detectLanguage(txt) {
     }
   ]);
 }
+export {
+  getComment,
+  getComments,
+  _getCommentsForModerationList,
+  _getCommentsList,
+  getNumberOfCommentsRemaining,
+  translateAndStoreComment,
+  detectLanguage
+};
 export default {
   getComment,
   getComments,

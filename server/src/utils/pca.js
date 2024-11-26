@@ -1,8 +1,8 @@
 import zlib from 'zlib';
-import LruCache from 'lru-cache';
 import _ from 'underscore';
+import LruCache from 'lru-cache';
+import { queryP_readOnly as pgQueryP_readOnly } from '../db/pg-query.js';
 import Config from '../config.js';
-import pg from '../db/pg-query.js';
 import logger from './logger.js';
 import { addInRamMetric } from './metered.js';
 const pcaCacheSize = Config.cacheMathResults ? 300 : 1;
@@ -16,7 +16,7 @@ export function fetchAndCacheLatestPcaData() {
     const timePassed = Date.now() - lastPrefetchPollStartTime;
     return Math.max(0, 2500 - timePassed);
   }
-  pg.queryP_readOnly('select * from math_main where caching_tick > ($1) order by caching_tick limit 10;', [
+  pgQueryP_readOnly('select * from math_main where caching_tick > ($1) order by caching_tick limit 10;', [
     lastPrefetchedMathTick
   ])
     .then((rows) => {
@@ -72,9 +72,8 @@ export function getPca(zid, math_tick) {
   }
   logger.info('mathpoll cache miss', { zid, math_tick });
   const queryStart = Date.now();
-  return pg
-    .queryP_readOnly('select * from math_main where zid = ($1) and math_env = ($2);', [zid, Config.mathEnv])
-    .then((rows) => {
+  return pgQueryP_readOnly('select * from math_main where zid = ($1) and math_env = ($2);', [zid, Config.mathEnv]).then(
+    (rows) => {
       const queryEnd = Date.now();
       const queryDuration = queryEnd - queryStart;
       addInRamMetric('pcaGetQuery', queryDuration);
@@ -103,7 +102,8 @@ export function getPca(zid, math_tick) {
       });
       processMathObject(item);
       return updatePcaCache(zid, item);
-    });
+    }
+  );
 }
 function updatePcaCache(zid, item) {
   return new Promise((resolve, reject) => {

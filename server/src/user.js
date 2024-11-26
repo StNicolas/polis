@@ -1,9 +1,9 @@
-import LruCache from 'lru-cache';
 import _ from 'underscore';
-import Conversation from './conversation.js';
+import LruCache from 'lru-cache';
 import pg from './db/pg-query.js';
-import logger from './utils/logger.js';
 import { MPromise } from './utils/metered.js';
+import Conversation from './conversation.js';
+import logger from './utils/logger.js';
 function getUserInfoForUid(uid, callback) {
   pg.query_readOnly('SELECT email, hname from users where uid = $1', [uid], (err, results) => {
     if (err) {
@@ -238,6 +238,17 @@ function getXidStuff(xid, zid) {
     return xidRecordForPtpt;
   });
 }
+export {
+  pidCache,
+  getUserInfoForUid,
+  getUserInfoForUid2,
+  getUser,
+  createDummyUser,
+  getPid,
+  getPidPromise,
+  getPidForParticipant,
+  getSocialInfoForUsers
+};
 export default {
   pidCache,
   getXidRecordByXidOwnerId,
