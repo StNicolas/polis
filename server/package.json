@@ -11,7 +11,7 @@
     "start:watch": "nodemon app.js",
     "fix-imports": "node bin/add-extensions.js",
     "clean": "rm -rf dist",
-    "build": "npm run fix-imports && npm run clean && tsc",
+    "build": "npm run fix-imports && npm run clean && tsc --pretty",
     "lint": "biome lint --write",
     "lint:unsafe": "biome lint --write --unsafe",
     "format": "biome format --write",
@@ -63,6 +63,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
+    "@types/node": "^22.10.0",
     "nodemon": "^3.1.7",
     "typescript": "^5.7.2"
   }
