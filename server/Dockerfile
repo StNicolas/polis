@@ -1,7 +1,7 @@
 # To build locally, for example:
 # docker build -t polis-server:local .
 # To run locally, for example:
-# docker run --rm --name polis-server --env-file .env --network polis-dev_polis-net \
+# docker run --rm --name polis-server --network polis-net --env-file .env \
 #  -p 5000:5000 --target dev polis-server:local
 #
 # For a dev build, use `--target dev`.
@@ -31,10 +31,11 @@ FROM base as dev
 # Set default NODE_ENV to development unless overridden at build time with --build-arg NODE_ENV=production
 ENV NODE_ENV ${NODE_ENV:-development}
 
+RUN npm ci --production=false
+
 COPY . .
 
 CMD npm run dev
-
 
 
 # Define the production build

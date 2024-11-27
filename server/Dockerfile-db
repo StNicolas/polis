@@ -1,6 +1,8 @@
 # Example Usage:
 # docker build -t polis-db:local -f Dockerfile-db .
-# docker run --rm -p 5432:5432 -e POSTGRES_DB=polis-dev -e POSTGRES_PASSWORD=postgres polis-db:local
+# docker network create polis-net
+# docker run --rm --name polis-db --network polis-net -p 5432:5432 \
+# -e POSTGRES_DB=polis-dev -e POSTGRES_PASSWORD=postgres polis-db:local
 
 FROM docker.io/postgres:16-alpine
 

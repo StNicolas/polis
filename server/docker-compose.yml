@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  polis-server:
+    build:
+      context: .
+      target: dev  # Use dev target for local development
+    ports:
+      - "5069:5069"  # Matching API_SERVER_PORT from .env
+    depends_on:
+      - polis-db
+    env_file:
+      - .env
+    networks:
+      - polis-net
+
+  polis-db:
+    build:
+      context: .
+      dockerfile: Dockerfile-db
+    environment:
+      POSTGRES_DB: polis-dev
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - polis-net
+
+networks:
+  polis-net:
+    name: polis-net
+
+volumes:
+  postgres_data:

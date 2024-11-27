@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "debug": "SERVER_LOG_LEVEL=debug nodemon --inspect=0.0.0.0:9229 app.js",
+    "dev": "npm run debug",
     "serve": "node app.js",
     "start": "npm run serve",
     "start:watch": "nodemon app.js",
