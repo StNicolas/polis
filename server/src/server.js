@@ -1,7 +1,7 @@
 import akismetLib from 'akismet';
 import AWS from 'aws-sdk';
-import badwords from 'badwords/object';
-import { Promise as BluebirdPromise } from 'bluebird';
+import badwords from 'badwords/object.js';
+import bluebird from 'bluebird';
 import http from 'http';
 import httpProxy from 'http-proxy';
 import async from 'async';
@@ -35,6 +35,7 @@ import { getPca, fetchAndCacheLatestPcaData } from './utils/pca.js';
 import { getZinvite, getZinvites, getZidForRid } from './utils/zinvite.js';
 import { handle_GET_reportExport } from './routes/export.js';
 AWS.config.update({ region: Config.awsRegion });
+const { Promise: BluebirdPromise } = bluebird;
 const devMode = Config.isDevMode;
 const s3Client = new AWS.S3({ apiVersion: '2006-03-01' });
 const escapeLiteral = pg.Client.prototype.escapeLiteral;
@@ -2777,9 +2778,9 @@ Email verified! You can close this tab or hit the back button.
         fail(res, 500, 'polis_err_conversationStats_misc', err);
       });
   }
-  function handle_GET_snapshot(req, res) {
-    const uid = req.p.uid;
-    const zid = req.p.zid;
+  function handle_GET_snapshot(req, _res) {
+    const _uid = req.p.uid;
+    const _zid = req.p.zid;
     if (true) {
       throw new Error('TODO Needs to clone participants_extended and any other new tables as well.');
     }
