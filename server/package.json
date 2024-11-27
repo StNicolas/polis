@@ -28,7 +28,7 @@
     "akismet": "~0.0.13",
     "async": "~0.1.22",
     "aws-sdk": "^2.1692.0",
-    "badwords": "~0.0.3",
+    "badwords": "~1.0.0",
     "bcryptjs": "~2.4.3",
     "bluebird": "^3.7.2",
     "boolean": "~0.1.3",
