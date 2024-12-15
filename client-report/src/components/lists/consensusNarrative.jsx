@@ -10,12 +10,15 @@ const ConsensusNarrative = ({
   formatTid,
   voteColors,
   narrative,
-  model
+  model,
 }) => {
   if (!narrative?.group_informed_consensus) {
     return <div>Loading Consensus...</div>;
   }
-  const txt = model === "claude" ? narrative.group_informed_consensus.responseClaude.content[0].text : narrative.group_informed_consensus.responseGemini;
+  const txt =
+    model === "claude"
+      ? narrative.group_informed_consensus.responseClaude.content[0].text
+      : narrative.group_informed_consensus.responseGemini;
 
   const narrativeJSON = model === "claude" ? JSON.parse(`{${txt}`) : JSON.parse(txt);
 
@@ -39,7 +42,11 @@ const ConsensusNarrative = ({
       <p style={globals.paragraph}>
         This narrative summary may contain hallucinations. Check each clause.
       </p>
-      <Narrative sectionData={narrative.group_informed_consensus} model={model} />
+      <Narrative
+        sectionData={narrative.group_informed_consensus}
+        model={model}
+        comments={comments}
+      />
       <div style={{ marginTop: 50 }}>
         <CommentList
           conversation={conversation}

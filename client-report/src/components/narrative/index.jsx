@@ -1,27 +1,30 @@
 import React from "react";
 
-const Narrative = ({ sectionData, model }) => {
+const Narrative = ({ sectionData, model, comments }) => {
   if (!sectionData) return null;
 
   console.log("narrativeData", sectionData);
 
-  const txt = model === "claude" ? sectionData.responseClaude.content[0].text : sectionData.responseGemini;
+  console.log(comments);
+
+  const txt =
+    model === "claude" ? sectionData.responseClaude.content[0].text : sectionData.responseGemini;
 
   const respData = model === "claude" ? JSON.parse(`{${txt}`) : JSON.parse(txt);
 
   return (
     <article style={{ maxWidth: "600px" }}>
-      {respData?.paragraphs?.map((section) => (
-        <div key={section.id}>
-          <h5>{section.title}</h5>
+      {respData?.paragraphs?.map((paragraph) => (
+        <div key={paragraph.id}>
+          <h5>{paragraph.title}</h5>
 
-          {section.sentences.map((sentence, idx) => (
+          {paragraph.sentences.map((sentence, idx) => (
             <p key={idx}>
               {sentence.clauses.map((clause, cIdx) => (
                 <span key={cIdx}>
                   {clause.text}
                   {clause.citations.map((citation, citIdx) => (
-                    <sup key={citIdx}>
+                    <sup key={citIdx} title={comments[citation].text}>
                       {citation}
                       {citIdx < clause.citations.length - 1 ? ", " : ""}
                     </sup>
